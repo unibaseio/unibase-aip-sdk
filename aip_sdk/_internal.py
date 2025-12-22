@@ -14,14 +14,16 @@ from uuid import uuid4
 
 
 # ============================================================================
-# Task Specifications
+# Internal Task Specification (SDK-only)
 # ============================================================================
 
 @dataclass
 class TaskSpec:
     """
-    Specification for a task to be executed by an agent.
-    Standalone version used internally by the SDK.
+    Internal task specification for SDK use only.
+
+    This is a lightweight internal type used by the SDK for agent execution context.
+    For external task representations, use A2A Protocol types from unibase-agent-sdk.
     """
     task_id: str
     name: str

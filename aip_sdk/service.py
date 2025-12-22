@@ -171,69 +171,11 @@ def create_agent_app(
                 success=False,
                 error=str(e),
             )
-    
-    # A2A protocol endpoints (for compatibility)
-    @app.post("/a2a/tasks/send")
-    async def a2a_send_task(request: Dict[str, Any]):
-        """A2A protocol task endpoint."""
-        task_data = request.get("params", {})
-        message = task_data.get("message", {})
-        parts = message.get("parts", [])
-        
-        # Extract text content
-        text_content = ""
-        for part in parts:
-            if part.get("kind") == "text":
-                text_content = part.get("text", "")
-                break
-        
-        if sdk_agent is None:
-            return {
-                "jsonrpc": "2.0",
-                "id": request.get("id"),
-                "error": {"code": -32000, "message": "Agent not configured"},
-            }
 
-        try:
-            from aip_sdk._internal import TaskSpec, AgentExecutionContext
+    # NOTE: A2A protocol endpoints have been removed from this module.
+    # Use unibase_agent_sdk.a2a.A2AServer for full A2A protocol support.
+    # This simple server only provides basic /execute endpoint.
 
-            domain_task = TaskSpec(
-                task_id=task_data.get("id", str(uuid4())),
-                name="a2a.request",
-                description=text_content,
-                payload={"message": text_content},
-            )
-
-            context = AgentExecutionContext(
-                invoke_agent=_noop_invoke,
-                emit_event=lambda e: None,
-                send_message=_noop_send,
-                receive_message=_noop_receive,
-                memory_read=lambda s: {},
-                memory_write=lambda s, d, desc: None,
-            )
-            
-            result = await sdk_agent.perform_task(domain_task, context)
-            
-            return {
-                "jsonrpc": "2.0",
-                "id": request.get("id"),
-                "result": {
-                    "id": task_data.get("id", str(uuid4())),
-                    "status": {"state": "completed"},
-                    "artifacts": [{
-                        "parts": [{"kind": "text", "text": result.summary}],
-                    }],
-                },
-            }
-            
-        except Exception as e:
-            return {
-                "jsonrpc": "2.0",
-                "id": request.get("id"),
-                "error": {"code": -32000, "message": str(e)},
-            }
-    
     return app
 
 
@@ -263,34 +205,124 @@ def serve_agent(
     port: int = 8100,
     reload: bool = False,
     log_level: str = "info",
+    enable_a2a: bool = False,
 ) -> None:
     """
     Run an agent as an HTTP service.
-    
+
     Args:
         agent: The agent to serve
         host: Host to bind to
         port: Port to listen on
         reload: Enable auto-reload for development
         log_level: Logging level
+        enable_a2a: If True, use unibase-agent-sdk A2A server for full A2A protocol support.
+                    If False (default), use simple FastAPI server with basic /execute endpoint.
+
+    Note:
+        For full A2A protocol support (streaming, task lifecycle, JSON-RPC 2.0),
+        set enable_a2a=True and ensure unibase-agent-sdk is installed:
+            pip install unibase-agent-sdk
     """
-    try:
-        import uvicorn
-    except ImportError:
-        raise ImportError(
-            "Uvicorn is required for serving agents. "
-            "Install with: pip install uvicorn"
+    if enable_a2a:
+        # Use agent-sdk's full A2A server implementation
+        try:
+            from unibase_agent_sdk.a2a import A2AServer, AgentCard, Skill
+            import asyncio
+        except ImportError:
+            raise ImportError(
+                "unibase-agent-sdk is required for A2A protocol support. "
+                "Install with: pip install unibase-agent-sdk\n"
+                "Or use enable_a2a=False for basic serving without A2A."
+            )
+
+        # Convert SDKAgent/AgentConfig to AgentCard
+        config = agent.config if isinstance(agent, SDKAgent) else agent
+        agent_card = AgentCard(
+            name=config.name,
+            description=config.description,
+            url=f"http://{host}:{port}",
+            version="1.0.0",
+            skills=[
+                Skill(
+                    id=skill.name,
+                    name=skill.name,
+                    description=skill.description,
+                    tags=[],
+                    examples=[]
+                )
+                for skill in config.skills
+            ]
         )
-    
-    app = create_agent_app(agent, host=host, port=port)
-    
-    uvicorn.run(
-        app,
-        host=host,
-        port=port,
-        reload=reload,
-        log_level=log_level,
-    )
+
+        # Create task handler wrapper
+        async def task_handler(task, message):
+            """Wrap agent execution for A2A protocol."""
+            from unibase_agent_sdk.a2a import StreamResponse, Message as A2AMessage
+            from aip_sdk._internal import TaskSpec, AgentExecutionContext
+
+            # Extract text from message
+            text_content = ""
+            for part in message.parts:
+                if hasattr(part, 'text'):
+                    text_content += part.text
+
+            # Create task for agent
+            domain_task = TaskSpec(
+                task_id=task.id,
+                name="a2a.request",
+                description=text_content,
+                payload={"message": text_content},
+            )
+
+            # Execute agent
+            sdk_agent = agent if isinstance(agent, SDKAgent) else None
+            if sdk_agent:
+                context = AgentExecutionContext(
+                    invoke_agent=_noop_invoke,
+                    emit_event=lambda e: None,
+                    send_message=_noop_send,
+                    receive_message=_noop_receive,
+                    memory_read=lambda s: {},
+                    memory_write=lambda s, d, desc: None,
+                )
+                result = await sdk_agent.perform_task(domain_task, context)
+                yield StreamResponse(message=A2AMessage.agent(result.summary))
+            else:
+                yield StreamResponse(message=A2AMessage.agent("Agent execution not configured"))
+
+        # Run A2A server
+        server = A2AServer(
+            agent_card=agent_card,
+            task_handler=task_handler,
+            host=host,
+            port=port
+        )
+
+        print(f"🚀 Starting A2A Server for {config.name} on {host}:{port}")
+        print(f"   Agent Card: http://{host}:{port}/.well-known/agent.json")
+        print(f"   A2A Endpoint: http://{host}:{port}/a2a")
+        asyncio.run(server.run())
+
+    else:
+        # Use simple FastAPI server (original implementation)
+        try:
+            import uvicorn
+        except ImportError:
+            raise ImportError(
+                "Uvicorn is required for serving agents. "
+                "Install with: pip install uvicorn"
+            )
+
+        app = create_agent_app(agent, host=host, port=port)
+
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+            reload=reload,
+            log_level=log_level,
+        )
 
 
 async def serve_agent_async(

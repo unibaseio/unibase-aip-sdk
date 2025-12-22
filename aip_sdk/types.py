@@ -20,8 +20,8 @@ from typing import (
 from enum import Enum
 
 
-class TaskStatus(Enum):
-    """Status of a task execution."""
+class RunStatus(Enum):
+    """Status of a run execution in the AIP platform."""
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -130,31 +130,6 @@ class AgentConfig:
             "metadata": self.metadata,
             "endpoint_url": self.endpoint_url,
         }
-
-
-@dataclass
-class Task:
-    """Represents a task to be executed by an agent."""
-    task_id: str
-    name: str
-    description: str
-    payload: Dict[str, Any] = field(default_factory=dict)
-    assigned_agent: Optional[str] = None
-
-    @classmethod
-    def from_domain(cls, task_spec: Any) -> "Task":
-        """Create from domain TaskSpec."""
-        return cls(
-            task_id=task_spec.task_id,
-            name=task_spec.name,
-            description=task_spec.description,
-            payload=task_spec.payload,
-            assigned_agent=task_spec.assigned_agent,
-        )
-
-    def get(self, key: str, default: Any = None) -> Any:
-        """Get payload value with optional default."""
-        return self.payload.get(key, default)
 
 
 @dataclass
@@ -330,7 +305,7 @@ class EventData:
 class RunResult:
     """Result of running a task through the orchestrator."""
     run_id: str
-    status: TaskStatus
+    status: RunStatus
     result: Optional[Dict[str, Any]] = None
     events: List[EventData] = field(default_factory=list)
     error: Optional[str] = None
@@ -338,7 +313,7 @@ class RunResult:
 
     @property
     def success(self) -> bool:
-        return self.status == TaskStatus.COMPLETED
+        return self.status == RunStatus.COMPLETED
 
     @property
     def output(self) -> Optional[Any]:

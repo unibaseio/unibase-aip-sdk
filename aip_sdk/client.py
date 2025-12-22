@@ -378,9 +378,10 @@ class AsyncAIPClient:
                     error = event.message or str(event.payload)
         except Exception as e:
             error = str(e)
-        
-        status = TaskStatus.FAILED if error else TaskStatus.COMPLETED
-        
+
+        from aip_sdk.types import RunStatus
+        status = RunStatus.FAILED if error else RunStatus.COMPLETED
+
         return RunResult(
             run_id=run_id or "",
             status=status,
@@ -736,11 +737,11 @@ class AsyncAIPClient:
     # =========================================================================
     # Memory Operations
     # =========================================================================
-    
+
     async def list_memory_scopes(self) -> List[str]:
         """
         List memory scopes.
-        
+
         Returns:
             List of scope names
         """
@@ -748,20 +749,86 @@ class AsyncAIPClient:
         response.raise_for_status()
         data = response.json()
         return data if isinstance(data, list) else []
-    
+
     async def get_memory(self, scope: str) -> Dict[str, Any]:
         """
         Get memory contents for a scope.
-        
+
         Args:
             scope: Memory scope name
-            
+
         Returns:
             Memory contents
         """
         response = await self.client.get(f"/memory/{scope}")
         response.raise_for_status()
         return response.json()
+
+    # =========================================================================
+    # Agent Communication
+    # =========================================================================
+
+    async def send_message(
+        self,
+        from_agent: str,
+        to_agent: str,
+        message: Dict[str, Any],
+        protocol: str = "aip"
+    ) -> Dict[str, Any]:
+        """
+        Send a message from one agent to another.
+
+        Args:
+            from_agent: Sender agent ID
+            to_agent: Receiver agent ID
+            message: Message content (arbitrary dict)
+            protocol: Communication protocol (default: "aip")
+
+        Returns:
+            Message delivery response
+
+        Example:
+            >>> response = await client.send_message(
+            ...     from_agent="agent_abc123",
+            ...     to_agent="agent_def456",
+            ...     message={"type": "question", "content": "Hello!"}
+            ... )
+        """
+        response = await self.client.post(
+            "/messages/send",
+            json={
+                "from": from_agent,
+                "to": to_agent,
+                "message": message,
+                "protocol": protocol
+            }
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def update_agent_metadata(
+        self,
+        agent_id: str,
+        metadata: Dict[str, Any]
+    ) -> None:
+        """
+        Update agent metadata.
+
+        Args:
+            agent_id: Agent ID
+            metadata: Metadata fields to update
+
+        Example:
+            >>> await client.update_agent_metadata(
+            ...     agent_id="agent_abc123",
+            ...     metadata={"version": "2.0", "capabilities": ["nlp", "vision"]}
+            ... )
+        """
+        response = await self.client.patch(
+            f"/agents/{agent_id}",
+            json={"metadata": metadata}
+        )
+        response.raise_for_status()
 
 
 class AIPClient:
@@ -974,6 +1041,26 @@ class AIPClient:
     def get_run_payments(self, run_id: str) -> List[Dict[str, Any]]:
         """Get payments for a specific run."""
         return self._run(self._async_client.get_run_payments(run_id))
+
+    # Agent Communication
+
+    def send_message(
+        self,
+        from_agent: str,
+        to_agent: str,
+        message: Dict[str, Any],
+        protocol: str = "aip"
+    ) -> Dict[str, Any]:
+        """Send a message from one agent to another."""
+        return self._run(self._async_client.send_message(from_agent, to_agent, message, protocol))
+
+    def update_agent_metadata(
+        self,
+        agent_id: str,
+        metadata: Dict[str, Any]
+    ) -> None:
+        """Update agent metadata."""
+        return self._run(self._async_client.update_agent_metadata(agent_id, metadata))
 
 
 # Convenience function for quick client creation
