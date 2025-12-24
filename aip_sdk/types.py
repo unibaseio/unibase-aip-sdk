@@ -16,8 +16,12 @@ from typing import (
     Optional,
     TypeVar,
     Union,
+    TYPE_CHECKING,
 )
 from enum import Enum
+
+if TYPE_CHECKING:
+    from aip_sdk._internal import TaskSpec
 
 
 class RunStatus(Enum):
@@ -27,6 +31,40 @@ class RunStatus(Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+# Alias for backward compatibility
+TaskStatus = RunStatus
+
+
+@dataclass
+class Task:
+    """Task specification for SDK use."""
+    task_id: str
+    name: str
+    description: str = ""
+    payload: Dict[str, Any] = field(default_factory=dict)
+    assigned_agent: Optional[str] = None
+
+    @classmethod
+    def from_domain(cls, task: Any) -> "Task":
+        """Create Task from domain task object."""
+        if isinstance(task, dict):
+            return cls(
+                task_id=task.get("task_id", ""),
+                name=task.get("name", ""),
+                description=task.get("description", ""),
+                payload=task.get("payload", {}),
+                assigned_agent=task.get("assigned_agent"),
+            )
+        # Handle domain task objects
+        return cls(
+            task_id=getattr(task, "task_id", ""),
+            name=getattr(task, "name", ""),
+            description=getattr(task, "description", ""),
+            payload=getattr(task, "payload", {}),
+            assigned_agent=getattr(task, "assigned_agent", None),
+        )
 
 
 @dataclass
