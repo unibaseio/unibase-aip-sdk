@@ -358,10 +358,11 @@ class AsyncAIPClient:
             RunResult with status and output
         """
         events: List[EventData] = []
+        payments: List[Dict[str, Any]] = []
         result = None
         error = None
         run_id = None
-        
+
         try:
             async for event in self.run_stream(
                 objective,
@@ -371,7 +372,17 @@ class AsyncAIPClient:
             ):
                 events.append(event)
                 run_id = run_id or event.run_id
-                
+
+                # Extract payment events
+                if "payment" in event.event_type.lower():
+                    payment_data = {
+                        "event_type": event.event_type,
+                        "timestamp": event.timestamp,
+                    }
+                    # Add all payload data
+                    payment_data.update(event.payload)
+                    payments.append(payment_data)
+
                 if event.is_completed:
                     result = event.payload
                 elif event.is_error:
@@ -388,6 +399,7 @@ class AsyncAIPClient:
             result=result,
             events=events,
             error=error,
+            payments=payments,
         )
     
     async def run_stream(
