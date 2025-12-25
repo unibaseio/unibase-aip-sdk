@@ -82,30 +82,88 @@ class ExternalAgentClient(ABC):
     async def register(self):
         """Register agent with gateway"""
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # Try the register-external endpoint first (preferred)
+                try:
+                    response = await client.post(
+                        f"{self.gateway_url}/gateway/agents/register-external",
+                        json={
+                            "agent_name": self.agent_name,
+                            "capabilities": self.capabilities,
+                            "metadata": {
+                                **self.metadata,
+                                "sdk_version": "1.0.0"
+                            }
+                        },
+                        timeout=15.0
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+
+                    self.agent_id = data["agent_id"]
+                    logger.info(
+                        f"Agent '{self.agent_name}' registered successfully "
+                        f"(ID: {self.agent_id})"
+                    )
+                    logger.info(f"Poll URL: {data['poll_url']}")
+                    logger.info(f"Heartbeat URL: {data['heartbeat_url']}")
+                    return
+
+                except (httpx.TimeoutException, httpx.ReadTimeout) as e:
+                    logger.warning(
+                        f"register-external endpoint timed out, falling back to standard register: {e}"
+                    )
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 404:
+                        logger.warning(
+                            "register-external endpoint not found, falling back to standard register"
+                        )
+                    else:
+                        raise
+
+                # Fallback: Use standard register endpoint + send initial heartbeat
                 response = await client.post(
-                    f"{self.gateway_url}/gateway/agents/register-external",
+                    f"{self.gateway_url}/gateway/register",
                     json={
                         "agent_name": self.agent_name,
-                        "capabilities": self.capabilities,
+                        "backend_url": "external",
                         "metadata": {
+                            "mode": "external",
+                            "capabilities": self.capabilities,
                             **self.metadata,
                             "sdk_version": "1.0.0"
-                        }
+                        },
+                        "force": True
                     },
                     timeout=10.0
                 )
                 response.raise_for_status()
                 data = response.json()
 
-                self.agent_id = data["agent_id"]
-
+                self.agent_id = data.get("agent_name", self.agent_name)
                 logger.info(
-                    f"Agent '{self.agent_name}' registered successfully "
+                    f"Agent '{self.agent_name}' registered via fallback "
                     f"(ID: {self.agent_id})"
                 )
-                logger.info(f"Poll URL: {data['poll_url']}")
-                logger.info(f"Heartbeat URL: {data['heartbeat_url']}")
+
+                # Send initial heartbeat to register with AgentStatusTracker
+                try:
+                    await client.post(
+                        f"{self.gateway_url}/gateway/agents/heartbeat",
+                        json={
+                            "agent_name": self.agent_name,
+                            "status": "idle",
+                            "metadata": {
+                                "capabilities": self.capabilities,
+                                **self.metadata,
+                                "sdk_version": "1.0.0"
+                            }
+                        },
+                        timeout=10.0
+                    )
+                    logger.info("Initial heartbeat sent to register with task tracker")
+                except Exception as hb_error:
+                    logger.warning(f"Initial heartbeat failed: {hb_error}")
 
         except httpx.HTTPStatusError as e:
             logger.error(f"Registration failed with status {e.response.status_code}")
