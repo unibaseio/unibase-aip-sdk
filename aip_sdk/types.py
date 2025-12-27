@@ -33,8 +33,6 @@ class RunStatus(Enum):
     CANCELLED = "cancelled"
 
 
-# Alias for backward compatibility
-TaskStatus = RunStatus
 
 
 @dataclass

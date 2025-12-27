@@ -44,7 +44,6 @@ from aip_sdk.types import (
     AgentInfo,
     EventData,
     RunResult,
-    TaskStatus,
     PaginatedResponse,
     UserInfo,
     PriceInfo,
@@ -341,6 +340,7 @@ class AsyncAIPClient:
         self,
         objective: str,
         *,
+        agent: Optional[str] = None,
         domain_hint: Optional[str] = None,
         user_id: Optional[str] = None,
         timeout: Optional[float] = None,
@@ -366,6 +366,7 @@ class AsyncAIPClient:
         try:
             async for event in self.run_stream(
                 objective,
+                agent=agent,
                 domain_hint=domain_hint,
                 user_id=user_id,
                 timeout=timeout,
@@ -406,23 +407,27 @@ class AsyncAIPClient:
         self,
         objective: str,
         *,
+        agent: Optional[str] = None,
         domain_hint: Optional[str] = None,
         user_id: Optional[str] = None,
         timeout: Optional[float] = None,
     ) -> AsyncGenerator[EventData, None]:
         """
         Execute a task and stream events.
-        
+
         Args:
             objective: The task objective/description
+            agent: Optional target agent name/handle for direct routing
             domain_hint: Optional hint for agent routing
             user_id: Optional user ID for payment
             timeout: Optional custom timeout
-            
+
         Yields:
             EventData for each streaming event
         """
         payload: Dict[str, Any] = {"objective": objective}
+        if agent:
+            payload["agent"] = agent
         if domain_hint:
             payload["domain_hint"] = domain_hint
         if user_id:
@@ -971,12 +976,14 @@ class AIPClient:
         self,
         objective: str,
         *,
+        agent: Optional[str] = None,
         domain_hint: Optional[str] = None,
         user_id: Optional[str] = None,
         timeout: Optional[float] = None,
     ) -> RunResult:
         return self._run(self._async_client.run(
             objective,
+            agent=agent,
             domain_hint=domain_hint,
             user_id=user_id,
             timeout=timeout,
