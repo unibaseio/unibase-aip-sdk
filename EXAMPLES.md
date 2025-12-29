@@ -26,7 +26,11 @@ pip install -e aip-sdk
 from aip_sdk import AsyncAIPClient, AgentConfig
 
 async def main():
-    async with AsyncAIPClient("http://localhost:8001") as client:
+    # AsyncAIPClient auto-detects URL from:
+    # - AIP_SDK_BASE_URL or AIP_ENDPOINT env vars
+    # - Deployment config (config/environments/*.yaml)
+    # - Falls back to localhost:8001 for local development
+    async with AsyncAIPClient() as client:
         # Check if platform is healthy
         if await client.health_check():
             print("✓ AIP platform is healthy")
@@ -59,8 +63,9 @@ asyncio.run(main())
 ```python
 from aip_sdk import AIPClient, AgentConfig
 
-# Create client
-client = AIPClient("http://localhost:8001")
+# AIPClient auto-detects URL from environment
+# Set AIP_SDK_BASE_URL or AIP_ENDPOINT for production
+client = AIPClient()
 
 # Register a user
 user = client.register_user(
@@ -83,7 +88,7 @@ print(f"Agent ID: {result['agent_id']}")
 ### Register a New User
 
 ```python
-async with AsyncAIPClient("http://localhost:8001") as client:
+async with AsyncAIPClient() as client:  # Auto-detects URL from environment
     # Simple registration
     user = await client.register_user(
         wallet_address="0xabc123...",
@@ -105,7 +110,7 @@ async with AsyncAIPClient("http://localhost:8001") as client:
 ### List Users with Pagination
 
 ```python
-async with AsyncAIPClient("http://localhost:8001") as client:
+async with AsyncAIPClient() as client:  # Auto-detects URL from environment
     # Get first page of users
     users_page = await client.list_users(limit=50, offset=0)
 
@@ -131,7 +136,7 @@ async with AsyncAIPClient("http://localhost:8001") as client:
 ```python
 from aip_sdk import AgentConfig, SkillConfig, SkillInput, SkillOutput
 
-async with AsyncAIPClient("http://localhost:8001") as client:
+async with AsyncAIPClient() as client:  # Auto-detects URL from environment
     # Define agent skills
     calculate_skill = SkillConfig(
         name="calculate",
@@ -168,7 +173,7 @@ async with AsyncAIPClient("http://localhost:8001") as client:
 ### List User's Agents
 
 ```python
-async with AsyncAIPClient("http://localhost:8001") as client:
+async with AsyncAIPClient() as client:  # Auto-detects URL from environment
     # Get all agents for a user
     agents_page = await client.list_user_agents(
         "user:0x123...",
@@ -189,7 +194,7 @@ async with AsyncAIPClient("http://localhost:8001") as client:
 ### Get Specific Agent
 
 ```python
-async with AsyncAIPClient("http://localhost:8001") as client:
+async with AsyncAIPClient() as client:  # Auto-detects URL from environment
     agent = await client.get_agent(
         user_id="user:0x123...",
         agent_id="erc8004:math_assistant"
@@ -206,7 +211,7 @@ async with AsyncAIPClient("http://localhost:8001") as client:
 ### Unregister an Agent
 
 ```python
-async with AsyncAIPClient("http://localhost:8001") as client:
+async with AsyncAIPClient() as client:  # Auto-detects URL from environment
     result = await client.unregister_agent(
         user_id="user:0x123...",
         agent_id="erc8004:old_agent"
@@ -220,7 +225,7 @@ async with AsyncAIPClient("http://localhost:8001") as client:
 ### Get Agent Pricing
 
 ```python
-async with AsyncAIPClient("http://localhost:8001") as client:
+async with AsyncAIPClient() as client:  # Auto-detects URL from environment
     price = await client.get_agent_price(
         user_id="user:0x123...",
         agent_id="erc8004:math_assistant"
@@ -233,7 +238,7 @@ async with AsyncAIPClient("http://localhost:8001") as client:
 ### Update Agent Pricing
 
 ```python
-async with AsyncAIPClient("http://localhost:8001") as client:
+async with AsyncAIPClient() as client:  # Auto-detects URL from environment
     new_price = await client.update_agent_price(
         user_id="user:0x123...",
         agent_id="erc8004:math_assistant",
@@ -248,7 +253,7 @@ async with AsyncAIPClient("http://localhost:8001") as client:
 ### List All Agent Prices
 
 ```python
-async with AsyncAIPClient("http://localhost:8001") as client:
+async with AsyncAIPClient() as client:  # Auto-detects URL from environment
     prices_page = await client.list_agent_prices(limit=50)
 
     print(f"Total priced agents: {prices_page.total}")
@@ -262,7 +267,7 @@ async with AsyncAIPClient("http://localhost:8001") as client:
 ### Execute a Task and Get Result
 
 ```python
-async with AsyncAIPClient("http://localhost:8001") as client:
+async with AsyncAIPClient() as client:  # Auto-detects URL from environment
     # Run a task and wait for completion
     result = await client.run(
         objective="What is the weather in San Francisco?",
@@ -283,7 +288,7 @@ async with AsyncAIPClient("http://localhost:8001") as client:
 ### Stream Task Events
 
 ```python
-async with AsyncAIPClient("http://localhost:8001") as client:
+async with AsyncAIPClient() as client:  # Auto-detects URL from environment
     async for event in client.run_stream(
         objective="Plan a trip to Tokyo",
         user_id="user:0x123..."
@@ -306,7 +311,7 @@ async with AsyncAIPClient("http://localhost:8001") as client:
 ### Get Run History
 
 ```python
-async with AsyncAIPClient("http://localhost:8001") as client:
+async with AsyncAIPClient() as client:  # Auto-detects URL from environment
     # List recent runs for a user
     runs_page = await client.list_user_runs(
         user_id="user:0x123...",
@@ -329,7 +334,7 @@ async with AsyncAIPClient("http://localhost:8001") as client:
 ### Get Run Payments
 
 ```python
-async with AsyncAIPClient("http://localhost:8001") as client:
+async with AsyncAIPClient() as client:  # Auto-detects URL from environment
     payments = await client.get_run_payments(run_id)
 
     total_cost = sum(p.get('amount', 0) for p in payments)
@@ -344,7 +349,7 @@ async with AsyncAIPClient("http://localhost:8001") as client:
 ### Iterate Through All Pages
 
 ```python
-async with AsyncAIPClient("http://localhost:8001") as client:
+async with AsyncAIPClient() as client:  # Auto-detects URL from environment
     user_id = "user:0x123..."
     all_agents = []
     offset = 0
@@ -388,7 +393,7 @@ async def fetch_all_pages(fetch_func, **kwargs):
     return items
 
 # Usage
-async with AsyncAIPClient("http://localhost:8001") as client:
+async with AsyncAIPClient() as client:  # Auto-detects URL from environment
     all_users = await fetch_all_pages(client.list_users, limit=50)
     print(f"Fetched {len(all_users)} users")
 ```
@@ -406,7 +411,7 @@ from aip_sdk import (
     AIPError
 )
 
-async with AsyncAIPClient("http://localhost:8001") as client:
+async with AsyncAIPClient() as client:  # Auto-detects URL from environment
     try:
         # Try to register an agent
         result = await client.register_agent(user_id, agent_config)
@@ -455,7 +460,7 @@ from aip_sdk import AsyncAIPClient, AgentConfig, SkillConfig
 async def agent_lifecycle_demo():
     """Complete example showing agent lifecycle management."""
 
-    async with AsyncAIPClient("http://localhost:8001") as client:
+    async with AsyncAIPClient() as client:  # Auto-detects URL from environment
         # 1. Wait for platform to be ready
         print("Waiting for AIP platform...")
         if not await client.wait_for_ready(max_attempts=30, interval=1.0):
