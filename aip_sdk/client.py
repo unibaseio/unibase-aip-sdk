@@ -6,8 +6,8 @@ Provides client classes for interacting with the AIP platform.
 Example:
     from aip_sdk import AIPClient
 
-    # Async usage
-    async with AIPClient("http://localhost:8001") as client:
+    # Async usage - URL auto-detected from AIP_ENVIRONMENT config
+    async with AIPClient() as client:
         # List agents
         agents = await client.list_agents()
 
@@ -18,6 +18,10 @@ Example:
         # Or get the final result
         result = await client.run("What's the weather in SF?")
         print(result.output)
+
+    # Or specify URL explicitly
+    async with AIPClient("http://api.example.com:8001") as client:
+        ...
 """
 
 from __future__ import annotations
@@ -56,34 +60,54 @@ from aip_sdk.exceptions import (
 logger = logging.getLogger(__name__)
 
 
+def _get_default_base_url() -> str:
+    """Get default base URL from environment or deployment config."""
+    import os
+    # Check environment variable first
+    env_url = os.environ.get("AIP_SDK_BASE_URL") or os.environ.get("AIP_PUBLIC_URL")
+    if env_url:
+        return env_url
+    # Try to load from deployment config
+    try:
+        from aip.core.deployment_config import get_config
+        config = get_config()
+        return config.sdk.aip_client.base_url or config.aip.public_url
+    except Exception:
+        # Fallback to localhost if config loading fails
+        return "http://localhost:8001"
+
+
 @dataclass
 class ClientConfig:
     """Configuration for the AIP client."""
-    base_url: str = "http://localhost:8001"
+    base_url: str = None  # Will be set in __post_init__
     timeout: float = 60.0
     stream_timeout: float = 300.0
     max_retries: int = 3
     retry_delay: float = 1.0
     headers: Dict[str, str] = None
-    
+
     def __post_init__(self):
         if self.headers is None:
             self.headers = {}
+        if self.base_url is None:
+            self.base_url = _get_default_base_url()
 
 
 class AsyncAIPClient:
     """
     Async client for interacting with the AIP platform.
-    
+
     Example:
-        async with AsyncAIPClient("http://localhost:8001") as client:
+        # URL auto-detected from AIP_ENVIRONMENT config
+        async with AsyncAIPClient() as client:
             result = await client.run("What's the weather?")
             print(result.output)
     """
-    
+
     def __init__(
         self,
-        base_url: str = "http://localhost:8001",
+        base_url: Optional[str] = None,
         *,
         timeout: float = 60.0,
         stream_timeout: float = 300.0,
@@ -92,9 +116,10 @@ class AsyncAIPClient:
     ):
         """
         Initialize the async AIP client.
-        
+
         Args:
-            base_url: Base URL of the AIP platform
+            base_url: Base URL of the AIP platform. If not provided, auto-detected
+                     from AIP_SDK_BASE_URL env var or deployment config.
             timeout: Default timeout for requests
             stream_timeout: Timeout for streaming requests
             headers: Additional headers to include in requests
@@ -691,21 +716,22 @@ class AsyncAIPClient:
 class AIPClient:
     """
     Synchronous wrapper around AsyncAIPClient.
-    
+
     Example:
-        client = AIPClient("http://localhost:8001")
-        
+        # URL auto-detected from AIP_ENVIRONMENT config
+        client = AIPClient()
+
         # List agents
         agents = client.list_agents()
-        
+
         # Run a task
         result = client.run("What's the weather?")
         print(result.output)
     """
-    
+
     def __init__(
         self,
-        base_url: str = "http://localhost:8001",
+        base_url: Optional[str] = None,
         *,
         timeout: float = 60.0,
         stream_timeout: float = 300.0,
@@ -713,9 +739,10 @@ class AIPClient:
     ):
         """
         Initialize the AIP client.
-        
+
         Args:
-            base_url: Base URL of the AIP platform
+            base_url: Base URL of the AIP platform. If not provided, auto-detected
+                     from AIP_SDK_BASE_URL env var or deployment config.
             timeout: Default timeout for requests
             stream_timeout: Timeout for streaming requests
             headers: Additional headers to include in requests

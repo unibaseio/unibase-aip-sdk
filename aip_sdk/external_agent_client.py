@@ -19,6 +19,7 @@ Example:
 import asyncio
 import httpx
 import logging
+import os
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Dict, Optional, List, Any
@@ -28,6 +29,20 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def _get_default_gateway_url() -> str:
+    """Get default gateway URL from deployment config or environment."""
+    env_url = os.environ.get("GATEWAY_URL")
+    if env_url:
+        return env_url
+
+    try:
+        from aip.core.deployment_config import get_config
+        config = get_config()
+        return config.gateway.public_url
+    except Exception:
+        return "http://localhost:8080"
 
 
 class ExternalAgentClient(ABC):
@@ -464,9 +479,10 @@ async def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="External Agent Client")
+    default_gateway = _get_default_gateway_url()
     parser.add_argument("--agent", default="calculator", help="Agent type (calculator, echo)")
     parser.add_argument("--name", default=None, help="Agent name (default: agent type)")
-    parser.add_argument("--gateway", default="http://localhost:8080", help="Gateway URL")
+    parser.add_argument("--gateway", default=default_gateway, help=f"Gateway URL (default: {default_gateway})")
     parser.add_argument("--poll-interval", type=float, default=5.0, help="Poll interval (seconds)")
     parser.add_argument("--heartbeat-interval", type=float, default=30.0, help="Heartbeat interval (seconds)")
 

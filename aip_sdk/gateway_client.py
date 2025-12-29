@@ -6,12 +6,17 @@ Helper utilities for agents to register with a gateway.
 Example:
     from aip_sdk.gateway_client import GatewayClient
 
-    client = GatewayClient("http://localhost:8080")
+    # URL auto-detected from AIP_ENVIRONMENT config
+    client = GatewayClient()
     result = await client.register_agent("calculator", "http://localhost:8103")
     print(f"Agent accessible at: {result['gateway_url']}")
+
+    # Or specify explicitly
+    client = GatewayClient("http://gateway.example.com:8080")
 """
 
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -19,18 +24,33 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+def _get_default_gateway_url() -> str:
+    """Get default gateway URL from deployment config or environment."""
+    env_url = os.environ.get("GATEWAY_URL")
+    if env_url:
+        return env_url
+
+    try:
+        from aip.core.deployment_config import get_config
+        config = get_config()
+        return config.gateway.public_url
+    except Exception:
+        return "http://localhost:8080"
+
+
 class GatewayClient:
     """Client for interacting with the Agent Gateway."""
 
-    def __init__(self, gateway_url: str, timeout: float = 10.0):
+    def __init__(self, gateway_url: Optional[str] = None, timeout: float = 10.0):
         """
         Initialize gateway client.
 
         Args:
-            gateway_url: Base URL of the gateway (e.g., http://localhost:8080)
+            gateway_url: Base URL of the gateway. If not provided, auto-detected
+                        from GATEWAY_URL env var or deployment config.
             timeout: Request timeout in seconds
         """
-        self.gateway_url = gateway_url.rstrip('/')
+        self.gateway_url = (gateway_url or _get_default_gateway_url()).rstrip('/')
         self.timeout = timeout
 
     async def register_agent(
