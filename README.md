@@ -29,7 +29,10 @@ pip install -e aip-sdk
 from aip_sdk import AsyncAIPClient, AgentConfig
 
 async def main():
-    async with AsyncAIPClient("http://localhost:8001") as client:
+    # AsyncAIPClient auto-detects URL from environment:
+    # - AIP_SDK_BASE_URL or AIP_ENDPOINT env vars
+    # - Or deployment config (config/environments/*.yaml)
+    async with AsyncAIPClient() as client:
         # Register a user
         user = await client.register_user(
             wallet_address="0x1234567890abcdef1234567890abcdef12345678",
