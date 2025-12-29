@@ -25,12 +25,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import (
     Any,
     AsyncGenerator,
-    Callable,
     Dict,
     List,
     Optional,
@@ -54,7 +52,6 @@ from aip_sdk.exceptions import (
     ExecutionError,
     RegistrationError,
 )
-from aip_sdk.agent_builder import SDKAgent
 
 logger = logging.getLogger(__name__)
 
@@ -138,10 +135,6 @@ class AsyncAIPClient:
             await self._client.aclose()
             self._client = None
     
-    # =========================================================================
-    # Health & Status
-    # =========================================================================
-    
     async def health_check(self) -> bool:
         """
         Check if the AIP platform is healthy.
@@ -175,10 +168,6 @@ class AsyncAIPClient:
                 return True
             await asyncio.sleep(interval)
         return False
-    
-    # =========================================================================
-    # Agent Operations
-    # =========================================================================
 
     async def list_user_agents(
         self,
@@ -240,14 +229,14 @@ class AsyncAIPClient:
     async def register_agent(
         self,
         user_id: str,
-        agent: Union[SDKAgent, AgentConfig, Dict[str, Any]],
+        agent: Union[AgentConfig, Dict[str, Any]],
     ) -> Dict[str, Any]:
         """
         Register an agent for a specific user.
 
         Args:
             user_id: The user ID who will own this agent
-            agent: Agent to register (SDKAgent, AgentConfig, or dict)
+            agent: Agent to register (AgentConfig or dict)
 
         Returns:
             Registration result with agent_id, handle, etc.
@@ -261,10 +250,7 @@ class AsyncAIPClient:
             >>> result = await client.register_agent("user:0x123...", config)
             >>> print(result["agent_id"])
         """
-        # Convert to registration dict
-        if isinstance(agent, SDKAgent):
-            reg_data = agent.config.to_registration_dict()
-        elif isinstance(agent, AgentConfig):
+        if isinstance(agent, AgentConfig):
             reg_data = agent.to_registration_dict()
         else:
             reg_data = agent
@@ -315,27 +301,6 @@ class AsyncAIPClient:
                 f"Failed to unregister agent {agent_id}: {e}"
             )
 
-    async def register(
-        self,
-        user_id: str,
-        agent: Union[SDKAgent, AgentConfig],
-    ) -> Dict[str, Any]:
-        """
-        Alias for register_agent.
-
-        Args:
-            user_id: The user ID who will own this agent
-            agent: Agent to register
-
-        Returns:
-            Registration result
-        """
-        return await self.register_agent(user_id, agent)
-    
-    # =========================================================================
-    # Task Execution
-    # =========================================================================
-    
     async def run(
         self,
         objective: str,
@@ -374,13 +339,11 @@ class AsyncAIPClient:
                 events.append(event)
                 run_id = run_id or event.run_id
 
-                # Extract payment events
                 if "payment" in event.event_type.lower():
                     payment_data = {
                         "event_type": event.event_type,
                         "timestamp": event.timestamp,
                     }
-                    # Add all payload data
                     payment_data.update(event.payload)
                     payments.append(payment_data)
 
@@ -471,10 +434,6 @@ class AsyncAIPClient:
             raise ExecutionError(
                 f"Task execution timed out after {stream_timeout}s",
             )
-    
-    # =========================================================================
-    # User & Account Management
-    # =========================================================================
 
     async def list_users(
         self,
@@ -555,24 +514,6 @@ class AsyncAIPClient:
             )
         response.raise_for_status()
         return response.json()
-    
-    async def get_user_balance(self, user_id: str) -> Dict[str, Any]:
-        """
-        Get user's balance.
-        
-        Args:
-            user_id: The user's ID
-            
-        Returns:
-            Balance information
-        """
-        response = await self.client.get(f"/accounts/users/{user_id}/balance")
-        response.raise_for_status()
-        return response.json()
-    
-    # =========================================================================
-    # Pricing Operations
-    # =========================================================================
 
     async def get_agent_price(
         self,
@@ -681,10 +622,6 @@ class AsyncAIPClient:
             limit=data["limit"],
             offset=data["offset"],
         )
-    
-    # =========================================================================
-    # Run Management
-    # =========================================================================
 
     async def list_user_runs(
         self,
@@ -751,103 +688,6 @@ class AsyncAIPClient:
         response.raise_for_status()
         return response.json()
     
-    # =========================================================================
-    # Memory Operations
-    # =========================================================================
-
-    async def list_memory_scopes(self) -> List[str]:
-        """
-        List memory scopes.
-
-        Returns:
-            List of scope names
-        """
-        response = await self.client.get("/memory")
-        response.raise_for_status()
-        data = response.json()
-        return data if isinstance(data, list) else []
-
-    async def get_memory(self, scope: str) -> Dict[str, Any]:
-        """
-        Get memory contents for a scope.
-
-        Args:
-            scope: Memory scope name
-
-        Returns:
-            Memory contents
-        """
-        response = await self.client.get(f"/memory/{scope}")
-        response.raise_for_status()
-        return response.json()
-
-    # =========================================================================
-    # Agent Communication
-    # =========================================================================
-
-    async def send_message(
-        self,
-        from_agent: str,
-        to_agent: str,
-        message: Dict[str, Any],
-        protocol: str = "aip"
-    ) -> Dict[str, Any]:
-        """
-        Send a message from one agent to another.
-
-        Args:
-            from_agent: Sender agent ID
-            to_agent: Receiver agent ID
-            message: Message content (arbitrary dict)
-            protocol: Communication protocol (default: "aip")
-
-        Returns:
-            Message delivery response
-
-        Example:
-            >>> response = await client.send_message(
-            ...     from_agent="agent_abc123",
-            ...     to_agent="agent_def456",
-            ...     message={"type": "question", "content": "Hello!"}
-            ... )
-        """
-        response = await self.client.post(
-            "/messages/send",
-            json={
-                "from": from_agent,
-                "to": to_agent,
-                "message": message,
-                "protocol": protocol
-            }
-        )
-        response.raise_for_status()
-        return response.json()
-
-    async def update_agent_metadata(
-        self,
-        agent_id: str,
-        metadata: Dict[str, Any]
-    ) -> None:
-        """
-        Update agent metadata.
-
-        Args:
-            agent_id: Agent ID
-            metadata: Metadata fields to update
-
-        Example:
-            >>> await client.update_agent_metadata(
-            ...     agent_id="agent_abc123",
-            ...     metadata={"version": "2.0", "capabilities": ["nlp", "vision"]}
-            ... )
-        """
-        response = await self.client.patch(
-            f"/agents/{agent_id}",
-            json={"metadata": metadata}
-        )
-        response.raise_for_status()
-
-
 class AIPClient:
     """
     Synchronous wrapper around AsyncAIPClient.
@@ -903,7 +743,6 @@ class AIPClient:
         try:
             return loop.run_until_complete(coro)
         except RuntimeError:
-            # Already running in an event loop
             return asyncio.ensure_future(coro)
     
     def close(self) -> None:
@@ -917,8 +756,6 @@ class AIPClient:
     
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
-    
-    # Delegate methods to async client
 
     def health_check(self) -> bool:
         """Check if the AIP platform is healthy."""
@@ -931,8 +768,6 @@ class AIPClient:
     ) -> bool:
         """Wait for the AIP platform to be ready."""
         return self._run(self._async_client.wait_for_ready(max_attempts, interval))
-
-    # Agent Operations
 
     def list_user_agents(
         self,
@@ -951,7 +786,7 @@ class AIPClient:
     def register_agent(
         self,
         user_id: str,
-        agent: Union[SDKAgent, AgentConfig, Dict[str, Any]],
+        agent: Union[AgentConfig, Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Register an agent for a specific user."""
         return self._run(self._async_client.register_agent(user_id, agent))
@@ -964,14 +799,6 @@ class AIPClient:
         """Unregister an agent owned by a user."""
         return self._run(self._async_client.unregister_agent(user_id, agent_id))
 
-    def register(
-        self,
-        user_id: str,
-        agent: Union[SDKAgent, AgentConfig],
-    ) -> Dict[str, Any]:
-        """Alias for register_agent."""
-        return self._run(self._async_client.register(user_id, agent))
-    
     def run(
         self,
         objective: str,
@@ -988,8 +815,6 @@ class AIPClient:
             user_id=user_id,
             timeout=timeout,
         ))
-    
-    # User Management
 
     def list_users(
         self,
@@ -1007,12 +832,6 @@ class AIPClient:
     ) -> Dict[str, Any]:
         """Register a new user."""
         return self._run(self._async_client.register_user(wallet_address, **kwargs))
-
-    def get_user_balance(self, user_id: str) -> Dict[str, Any]:
-        """Get user's balance."""
-        return self._run(self._async_client.get_user_balance(user_id))
-
-    # Pricing Operations
 
     def get_agent_price(
         self,
@@ -1041,8 +860,6 @@ class AIPClient:
         """List agent prices with pagination."""
         return self._run(self._async_client.list_agent_prices(limit=limit, offset=offset))
 
-    # Run Management
-
     def list_user_runs(
         self,
         user_id: str,
@@ -1060,63 +877,3 @@ class AIPClient:
     def get_run_payments(self, run_id: str) -> List[Dict[str, Any]]:
         """Get payments for a specific run."""
         return self._run(self._async_client.get_run_payments(run_id))
-
-    # Agent Communication
-
-    def send_message(
-        self,
-        from_agent: str,
-        to_agent: str,
-        message: Dict[str, Any],
-        protocol: str = "aip"
-    ) -> Dict[str, Any]:
-        """Send a message from one agent to another."""
-        return self._run(self._async_client.send_message(from_agent, to_agent, message, protocol))
-
-    def update_agent_metadata(
-        self,
-        agent_id: str,
-        metadata: Dict[str, Any]
-    ) -> None:
-        """Update agent metadata."""
-        return self._run(self._async_client.update_agent_metadata(agent_id, metadata))
-
-
-# Convenience function for quick client creation
-def create_client(
-    base_url: str = "http://localhost:8001",
-    **kwargs,
-) -> AIPClient:
-    """
-    Create an AIP client.
-    
-    Args:
-        base_url: Base URL of the AIP platform
-        **kwargs: Additional client configuration
-        
-    Returns:
-        AIPClient instance
-    """
-    return AIPClient(base_url, **kwargs)
-
-
-@asynccontextmanager
-async def async_client(
-    base_url: str = "http://localhost:8001",
-    **kwargs,
-) -> AsyncGenerator[AsyncAIPClient, None]:
-    """
-    Create an async AIP client as a context manager.
-    
-    Args:
-        base_url: Base URL of the AIP platform
-        **kwargs: Additional client configuration
-        
-    Yields:
-        AsyncAIPClient instance
-    """
-    client = AsyncAIPClient(base_url, **kwargs)
-    try:
-        yield client
-    finally:
-        await client.close()

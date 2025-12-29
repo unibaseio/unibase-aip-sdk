@@ -1,57 +1,26 @@
 """
 Unibase AIP SDK
 
-A simple, developer-friendly SDK for building and deploying AI agents
-on the Unibase Agent Interoperability Protocol.
+SDK for building AI agents on the Unibase Agent Interoperability Protocol.
 
-Quick Start:
-    # Create an agent with a decorator
-    from aip_sdk import Agent, skill
+RECOMMENDED: Use unibase_agent_sdk for new projects:
 
-    @Agent(name="My Agent", description="A helpful agent", price=0.001)
-    async def my_agent_handler(task, context):
-        return {"result": "Hello from my agent!"}
+    from unibase_agent_sdk import expose_as_a2a
 
-    # Run as a service
-    from aip_sdk import serve_agent
-    serve_agent(my_agent_handler, port=8100)
+    def my_handler(text: str) -> str:
+        return f"Hello: {text}"
 
-Client Usage:
-    from aip_sdk import AIPClient
+    server = expose_as_a2a("MyAgent", my_handler, port=8100)
+    await server.run()
 
-    # Connect to AIP platform
-    async with AIPClient("http://localhost:8001") as client:
-        # List agents
-        agents = await client.list_agents()
-
-        # Run a task
-        result = await client.run("What is the weather?")
-        print(result.output)
-
-Class-Based Agent:
-    from aip_sdk import Agent, skill
-    
-    @Agent(name="Calculator", description="Math operations")
-    class Calculator:
-        @skill("calculate", "Perform calculations")
-        async def calculate(self, task, context):
-            expr = task.get("expression", "0")
-            return {"result": eval(expr)}
+This package (aip_sdk) provides:
+- AIPClient for connecting to AIP platform
+- Types for task results, agent config, etc.
 """
 
 from aip_sdk.client import (
     AIPClient,
     AsyncAIPClient,
-    create_client,
-    async_client,
-)
-from aip_sdk.agent_builder import (
-    AgentBuilder,
-    Agent,
-    skill,
-    SkillBuilder,
-    SDKAgent,
-    create_agent,
 )
 from aip_sdk.types import (
     Task,
@@ -80,11 +49,6 @@ from aip_sdk.exceptions import (
     TimeoutError,
     AgentNotFoundError,
 )
-from aip_sdk.service import (
-    serve_agent,
-    serve_agent_async,
-    create_agent_app,
-)
 
 __version__ = "0.1.0"
 
@@ -94,15 +58,6 @@ __all__ = [
     # Client
     "AIPClient",
     "AsyncAIPClient",
-    "create_client",
-    "async_client",
-    # Agent Building
-    "AgentBuilder",
-    "Agent",
-    "skill",
-    "SkillBuilder",
-    "SDKAgent",
-    "create_agent",
     # Types
     "Task",
     "TaskResult",
@@ -128,8 +83,4 @@ __all__ = [
     "ValidationError",
     "TimeoutError",
     "AgentNotFoundError",
-    # Service
-    "serve_agent",
-    "serve_agent_async",
-    "create_agent_app",
 ]

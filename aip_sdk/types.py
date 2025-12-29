@@ -20,8 +20,6 @@ from typing import (
 )
 from enum import Enum
 
-if TYPE_CHECKING:
-    from aip_sdk._internal import TaskSpec
 
 
 class RunStatus(Enum):
@@ -55,7 +53,6 @@ class Task:
                 payload=task.get("payload", {}),
                 assigned_agent=task.get("assigned_agent"),
             )
-        # Handle domain task objects
         return cls(
             task_id=getattr(task, "task_id", ""),
             name=getattr(task, "name", ""),
@@ -117,7 +114,19 @@ class SkillConfig:
 
 @dataclass
 class CostModel:
-    """Agent cost model configuration."""
+    """Agent cost model configuration for SDK use.
+
+    This is a simplified cost model for agent developers to specify basic pricing.
+    It intentionally has fewer fields than the platform's CostModel (in aip.core.accounts.models)
+    which includes additional fee types (per_use_fee, per_write_fee, per_token_fee, custom_fees).
+
+    For most agent use cases, base_call_fee and per_agent_call_fee are sufficient.
+    The platform will handle any necessary conversions internally.
+
+    Args:
+        base_call_fee: Fixed fee charged per call to this agent
+        per_agent_call_fee: Additional fee when this agent calls other agents
+    """
     base_call_fee: float = 0.0
     per_agent_call_fee: float = 0.0
 
@@ -207,23 +216,11 @@ class TaskResult:
 @dataclass
 class AgentContext:
     """Context provided to agent handlers during task execution."""
-    
-    # Callable for invoking other agents
     invoke_agent: Callable[[str, Any, str], Awaitable[TaskResult]]
-    
-    # Callable for emitting events
     emit_event: Callable[[Dict[str, Any]], None]
-    
-    # Callable for sending messages
     send_message: Callable[[Any], Awaitable[None]]
-    
-    # Callable for receiving messages
     receive_message: Callable[[Optional[str], Optional[float]], Awaitable[Any]]
-    
-    # Callable for reading from memory
     memory_read: Callable[[str], Dict[str, Any]]
-    
-    # Callable for writing to memory
     memory_write: Callable[[str, Dict[str, Any], str], None]
 
     async def call_agent(
@@ -235,32 +232,32 @@ class AgentContext:
     ) -> TaskResult:
         """
         Call another agent with a task.
-        
+
         Args:
             agent_id: The ID of the agent to call
             task_name: Name of the task to execute
             payload: Task payload/parameters
             reason: Reason for the call (for logging)
-            
+
         Returns:
             TaskResult from the called agent
         """
-        from aip_sdk._internal import TaskSpec
         from uuid import uuid4
-
-        task = TaskSpec(
+        task = Task(
             task_id=str(uuid4()),
             name=task_name,
             description=reason or f"Call to {agent_id}",
             payload=payload,
         )
         result = await self.invoke_agent(agent_id, task, reason)
-        return TaskResult(
-            output=result.output,
-            summary=result.summary,
-            used_tools=result.used_tools,
-            downstream_calls=result.downstream_calls,
-        )
+        if hasattr(result, 'output'):
+            return TaskResult(
+                output=result.output,
+                summary=getattr(result, 'summary', ''),
+                used_tools=getattr(result, 'used_tools', []),
+                downstream_calls=getattr(result, 'downstream_calls', []),
+            )
+        return result
 
     def log(self, event_type: str, **data: Any) -> None:
         """

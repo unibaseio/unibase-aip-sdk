@@ -161,7 +161,7 @@ class TimeoutError(AIPError):
 
 class AgentNotFoundError(AIPError):
     """Requested agent was not found."""
-    
+
     def __init__(
         self,
         message: str = "Agent not found",
@@ -173,3 +173,51 @@ class AgentNotFoundError(AIPError):
         self.agent_id = agent_id
         if agent_id:
             self.details["agent_id"] = agent_id
+
+
+class StorageError(AIPError):
+    """Error during storage operations."""
+
+    def __init__(
+        self,
+        message: str = "Storage operation failed",
+        *,
+        path: Optional[str] = None,
+        operation: Optional[str] = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(message, code="STORAGE_ERROR", **kwargs)
+        self.path = path
+        self.operation = operation
+        if path:
+            self.details["path"] = path
+        if operation:
+            self.details["operation"] = operation
+
+
+class ConfigurationError(AIPError):
+    """Error in configuration."""
+
+    def __init__(
+        self,
+        message: str = "Configuration error",
+        *,
+        config_key: Optional[str] = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(message, code="CONFIG_ERROR", **kwargs)
+        self.config_key = config_key
+        if config_key:
+            self.details["config_key"] = config_key
+
+
+class AgentExecutionError(ExecutionError):
+    """Error during agent execution."""
+
+    def __init__(
+        self,
+        message: str = "Agent execution failed",
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(message, **kwargs)
+        self.code = "AGENT_EXECUTION_ERROR"
