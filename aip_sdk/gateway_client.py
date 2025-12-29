@@ -25,17 +25,11 @@ logger = logging.getLogger(__name__)
 
 
 def _get_default_gateway_url() -> str:
-    """Get default gateway URL from deployment config or environment."""
-    env_url = os.environ.get("GATEWAY_URL")
-    if env_url:
-        return env_url
-
-    try:
-        from aip.core.deployment_config import get_config
-        config = get_config()
-        return config.gateway.public_url
-    except Exception:
-        return "http://localhost:8080"
+    """Get default gateway URL from GATEWAY_URL environment variable."""
+    url = os.environ.get("GATEWAY_URL")
+    if url:
+        return url.rstrip("/")
+    return "http://localhost:8080"
 
 
 class GatewayClient:

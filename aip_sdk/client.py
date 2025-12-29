@@ -61,20 +61,12 @@ logger = logging.getLogger(__name__)
 
 
 def _get_default_base_url() -> str:
-    """Get default base URL from environment or deployment config."""
+    """Get default base URL from AIP_ENDPOINT environment variable."""
     import os
-    # Check environment variable first
-    env_url = os.environ.get("AIP_SDK_BASE_URL") or os.environ.get("AIP_PUBLIC_URL")
-    if env_url:
-        return env_url
-    # Try to load from deployment config
-    try:
-        from aip.core.deployment_config import get_config
-        config = get_config()
-        return config.sdk.aip_client.base_url or config.aip.public_url
-    except Exception:
-        # Fallback to localhost if config loading fails
-        return "http://localhost:8001"
+    url = os.environ.get("AIP_ENDPOINT")
+    if url:
+        return url.rstrip("/")
+    return "http://localhost:8001"
 
 
 @dataclass
