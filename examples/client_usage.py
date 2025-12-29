@@ -9,11 +9,16 @@ This example demonstrates how to use the AIP SDK client to:
 - Stream task events
 
 Prerequisites:
-- AIP platform running at http://localhost:8001
+- AIP platform running (default: http://localhost:8001)
 - Install: pip install -e packages/unibase-aip-sdk
+
+Environment Variables:
+- AIP_SDK_BASE_URL: Override the AIP platform URL
+- AIP_PUBLIC_URL: Alternative override for AIP platform URL
 """
 
 import asyncio
+import os
 from aip_sdk import AsyncAIPClient, AgentConfig
 
 
@@ -26,10 +31,12 @@ async def main():
     print()
 
     # 1. Connect to AIP platform
+    # URL is auto-detected from environment or defaults to localhost
     print("[1/5] Connecting to AIP Platform")
     print("-" * 70)
 
-    async with AsyncAIPClient("http://localhost:8001") as client:
+    # AsyncAIPClient auto-detects URL from AIP_SDK_BASE_URL or AIP_PUBLIC_URL env vars
+    async with AsyncAIPClient() as client:
         # Check health
         is_healthy = await client.health_check()
         print(f"  Platform healthy: {is_healthy}")

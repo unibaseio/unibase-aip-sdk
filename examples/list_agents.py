@@ -8,10 +8,15 @@ This example shows how to use the AIP SDK to:
 - Check agent pricing
 
 Prerequisites:
-- AIP platform running at http://localhost:8001
+- AIP platform running (default: http://localhost:8001)
+
+Environment Variables:
+- AIP_SDK_BASE_URL: Override the AIP platform URL
+- AIP_PUBLIC_URL: Alternative override for AIP platform URL
 """
 
 import asyncio
+import os
 from aip_sdk import AsyncAIPClient
 
 
@@ -20,7 +25,8 @@ async def main():
 
     print("Connecting to AIP Platform...")
 
-    async with AsyncAIPClient("http://localhost:8001") as client:
+    # AsyncAIPClient auto-detects URL from environment variables
+    async with AsyncAIPClient() as client:
         # Check health first
         if not await client.health_check():
             print("Platform not available")
