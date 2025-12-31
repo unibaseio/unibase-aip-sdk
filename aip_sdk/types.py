@@ -306,6 +306,148 @@ class AgentContext:
             memory_write=ctx.memory_write,
         )
 
+    @classmethod
+    def from_a2a_factory(
+        cls,
+        factory: Any,
+        run_id: str,
+        caller_agent: str,
+        *,
+        emit_event: Optional[Callable[[Dict[str, Any]], None]] = None,
+        send_message: Optional[Callable[[Any], Awaitable[None]]] = None,
+        receive_message: Optional[Callable[[Optional[str], Optional[float]], Awaitable[Any]]] = None,
+        memory_read: Optional[Callable[[str], Dict[str, Any]]] = None,
+        memory_write: Optional[Callable[[str, Dict[str, Any], str], None]] = None,
+    ) -> "AgentContext":
+        """Create AgentContext with A2A-based invoke_agent.
+
+        This creates an AgentContext where inter-agent calls use the A2A
+        protocol via the provided factory.
+
+        Args:
+            factory: A2AClientFactory for routing agent calls
+            run_id: Current run ID for context
+            caller_agent: Agent ID that will use this context
+            emit_event: Optional event emission callback
+            send_message: Optional message send callback
+            receive_message: Optional message receive callback
+            memory_read: Optional memory read callback
+            memory_write: Optional memory write callback
+
+        Returns:
+            AgentContext with A2A-based invoke_agent
+
+        Example:
+            from aip_sdk.a2a import A2AClientFactory
+
+            factory = A2AClientFactory()
+            context = AgentContext.from_a2a_factory(
+                factory=factory,
+                run_id="run-123",
+                caller_agent="my-agent",
+            )
+        """
+        import json
+        from unibase_agent_sdk.a2a.types import Message, TaskState, Role
+
+        try:
+            from aip_sdk.a2a.envelope import AIPContext, PaymentContextData
+            from aip_sdk.a2a.agent_adapter import extract_text_from_message
+        except ImportError:
+            raise ImportError(
+                "A2A module not available. Ensure aip_sdk.a2a is properly installed."
+            )
+
+        async def invoke_agent(
+            target_agent: str,
+            subtask: Any,
+            reason: str = "",
+        ) -> "TaskResult":
+            """Invoke another agent via A2A."""
+            # Convert subtask to A2A message
+            if isinstance(subtask, dict):
+                payload = subtask
+            elif hasattr(subtask, "payload"):
+                payload = subtask.payload
+            else:
+                payload = {"task": str(subtask)}
+
+            # Create A2A message
+            message = Message.user(json.dumps(payload))
+
+            # Create AIP context
+            aip_context = AIPContext(
+                run_id=run_id,
+                caller_agent=caller_agent,
+                caller_chain=[],
+                payment_context=PaymentContextData(
+                    run_id=run_id,
+                    caller=caller_agent,
+                    actor=target_agent,
+                    chain=[caller_agent],
+                ),
+            )
+
+            try:
+                # Send via A2A
+                result_task = await factory.send_task(
+                    agent_id=target_agent,
+                    message=message,
+                    aip_context=aip_context,
+                )
+
+                # Convert to TaskResult
+                output = {}
+                summary = ""
+
+                # Get response from history (last agent message)
+                for msg in reversed(result_task.history):
+                    if msg.role == Role.AGENT:
+                        text = extract_text_from_message(msg)
+                        summary = text
+                        try:
+                            output = json.loads(text)
+                        except json.JSONDecodeError:
+                            output = {"response": text}
+                        break
+
+                # Check artifacts
+                for artifact in result_task.artifacts:
+                    for part in artifact.parts:
+                        if hasattr(part, "text"):
+                            if "artifact" not in output:
+                                output["artifact"] = part.text
+                        if hasattr(part, "data"):
+                            if "data" not in output:
+                                output["data"] = part.data
+
+                # Determine success based on state
+                success = result_task.status.state == TaskState.COMPLETED
+                error = None
+                if not success and result_task.status.message:
+                    error = extract_text_from_message(result_task.status.message)
+
+                return TaskResult(
+                    output=output,
+                    summary=summary,
+                    used_tools=[],
+                    downstream_calls=[],
+                    success=success,
+                    error=error,
+                )
+
+            except Exception as e:
+                return TaskResult.error_result(str(e))
+
+        return cls(
+            invoke_agent=invoke_agent,
+            emit_event=emit_event or (lambda event: None),
+            send_message=send_message or (lambda msg: None),
+            receive_message=receive_message or (lambda topic, timeout: None),
+            memory_read=memory_read or (lambda scope: {}),
+            memory_write=memory_write or (lambda scope, data, desc: None),
+        )
+
 
 @dataclass
 class EventData:
