@@ -38,7 +38,7 @@ def _get_default_gateway_url() -> str:
         return env_url
 
     try:
-        from aip.core.deployment_config import get_config
+        from aip.core.config import get_config
         config = get_config()
         return config.gateway.public_url
     except Exception:

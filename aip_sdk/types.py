@@ -14,9 +14,6 @@ from typing import (
     Dict,
     List,
     Optional,
-    TypeVar,
-    Union,
-    TYPE_CHECKING,
 )
 from enum import Enum
 
@@ -445,8 +442,3 @@ class PriceInfo:
             currency=data.get("currency", "USD"),
             metadata=data.get("metadata", {}),
         )
-
-
-# Type aliases for handler functions
-TaskHandler = Callable[[Task, AgentContext], Awaitable[TaskResult]]
-SimpleHandler = Callable[[Dict[str, Any]], Awaitable[Dict[str, Any]]]

@@ -193,31 +193,3 @@ class StorageError(AIPError):
             self.details["path"] = path
         if operation:
             self.details["operation"] = operation
-
-
-class ConfigurationError(AIPError):
-    """Error in configuration."""
-
-    def __init__(
-        self,
-        message: str = "Configuration error",
-        *,
-        config_key: Optional[str] = None,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(message, code="CONFIG_ERROR", **kwargs)
-        self.config_key = config_key
-        if config_key:
-            self.details["config_key"] = config_key
-
-
-class AgentExecutionError(ExecutionError):
-    """Error during agent execution."""
-
-    def __init__(
-        self,
-        message: str = "Agent execution failed",
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(message, **kwargs)
-        self.code = "AGENT_EXECUTION_ERROR"
