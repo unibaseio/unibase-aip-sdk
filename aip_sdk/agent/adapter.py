@@ -18,7 +18,6 @@ from a2a.types import (
     AgentProvider,
     Role,
 )
-from unibase_agent_sdk.a2a import StreamResponse
 
 # Backwards compatibility aliases
 Skill = AgentSkill
@@ -27,7 +26,8 @@ Provider = AgentProvider
 from aip_sdk.types import Task as SDKTask, TaskResult, AgentContext
 
 if TYPE_CHECKING:
-    from aip_sdk.a2a.client_factory import A2AClientFactory
+    from aip_sdk.gateway.a2a_client import GatewayA2AClient
+    from unibase_agent_sdk.a2a import StreamResponse
 
 logger = logging.getLogger(__name__)
 
@@ -155,13 +155,19 @@ class A2AAgentAdapter:
     def __init__(
         self,
         agent: Any,
-        client_factory: Optional["A2AClientFactory"] = None,
+        gateway_client: Optional["GatewayA2AClient"] = None,
         *,
         endpoint_url: Optional[str] = None,
     ):
-        """Initialize the adapter."""
+        """Initialize the adapter.
+
+        Args:
+            agent: The agent to adapt.
+            gateway_client: The GatewayA2AClient for invoking other agents.
+            endpoint_url: The endpoint URL of this agent.
+        """
         self._agent = agent
-        self._client_factory = client_factory
+        self._gateway_client = gateway_client
         self._endpoint_url = endpoint_url
 
         # Generate agent card
@@ -196,17 +202,17 @@ class A2AAgentAdapter:
         run_id: str,
     ) -> AgentContext:
         """Create an AgentContext for the task."""
-        factory = self._client_factory
+        gateway_client = self._gateway_client
 
         async def invoke_agent(
             agent_id: str,
             sub_task: Any,
             reason: str = "",
         ) -> TaskResult:
-            """Invoke another agent via A2A."""
-            if not factory:
+            """Invoke another agent via A2A through gateway."""
+            if not gateway_client:
                 return TaskResult.error_result(
-                    "Agent invocation not available (no client factory)"
+                    "Agent invocation not available (no gateway client)"
                 )
 
             # Convert task to A2A message
@@ -220,7 +226,7 @@ class A2AAgentAdapter:
             message = Message.user(json.dumps(payload))
 
             # Import here to avoid circular import
-            from aip_sdk.a2a.envelope import AIPContext
+            from aip_sdk.agent.context import AIPContext
 
             # Create AIP context for the call
             aip_context = AIPContext(
@@ -230,7 +236,7 @@ class A2AAgentAdapter:
             )
 
             try:
-                result_task = await factory.send_task(
+                result_task = await gateway_client.send_task(
                     agent_id=agent_id,
                     message=message,
                     context_id=task.context_id,
@@ -314,8 +320,10 @@ class A2AAgentAdapter:
     async def handle_task(
         self,
         task: A2ATask,
-    ) -> AsyncGenerator[StreamResponse, None]:
+    ) -> AsyncGenerator["StreamResponse", None]:
         """Handle an A2A Task by calling the wrapped agent."""
+        from unibase_agent_sdk.a2a import StreamResponse
+
         run_id = task.context_id or str(uuid.uuid4())
 
         # Emit initial working status
@@ -422,13 +430,22 @@ class A2AAgentAdapter:
 
 def adapt_agent(
     agent: Any,
-    client_factory: Optional["A2AClientFactory"] = None,
+    gateway_client: Optional["GatewayA2AClient"] = None,
     *,
     endpoint_url: Optional[str] = None,
 ) -> A2AAgentAdapter:
-    """Convenience function to create an A2A adapter for an agent."""
+    """Convenience function to create an A2A adapter for an agent.
+
+    Args:
+        agent: The agent to adapt.
+        gateway_client: The GatewayA2AClient for invoking other agents.
+        endpoint_url: The endpoint URL of this agent.
+
+    Returns:
+        An A2AAgentAdapter wrapping the agent.
+    """
     return A2AAgentAdapter(
         agent=agent,
-        client_factory=client_factory,
+        gateway_client=gateway_client,
         endpoint_url=endpoint_url,
     )

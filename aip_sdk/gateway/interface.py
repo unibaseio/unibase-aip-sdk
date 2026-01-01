@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from typing import (
+    TYPE_CHECKING,
     Any,
     AsyncGenerator,
     Callable,
@@ -10,14 +11,24 @@ from typing import (
 )
 
 from a2a.types import Task, Message, AgentCard
-from unibase_agent_sdk.a2a import StreamResponse
 
-from aip_sdk.a2a.envelope import AIPContext
+from aip_sdk.agent.context import AIPContext
+
+if TYPE_CHECKING:
+    from unibase_agent_sdk.a2a import StreamResponse
+
+
+class AgentNotFoundError(Exception):
+    """Raised when an agent cannot be found."""
+
+    def __init__(self, agent_id: str):
+        self.agent_id = agent_id
+        super().__init__(f"Agent not found: {agent_id}")
 
 
 # Type alias for task handlers
 # A TaskHandler receives a Task and yields StreamResponse events
-TaskHandler = Callable[[Task], AsyncGenerator[StreamResponse, None]]
+TaskHandler = Callable[[Task], AsyncGenerator["StreamResponse", None]]
 
 
 class A2AClientInterface(ABC):
@@ -33,7 +44,7 @@ class A2AClientInterface(ABC):
         context_id: Optional[str] = None,
         aip_context: Optional[AIPContext] = None,
         stream: bool = False,
-    ) -> Union[Task, AsyncGenerator[StreamResponse, None]]:
+    ) -> Union[Task, AsyncGenerator["StreamResponse", None]]:
         """Send a task to an agent."""
         ...
 

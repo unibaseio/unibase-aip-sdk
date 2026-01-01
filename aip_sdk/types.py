@@ -276,8 +276,8 @@ class AgentContext:
         from a2a.types import Message, TaskState, Role
 
         try:
-            from aip_sdk.a2a.envelope import AIPContext, PaymentContextData
-            from aip_sdk.a2a.agent_adapter import extract_text_from_message
+            from aip_sdk.agent.context import AIPContext, PaymentContextData
+            from aip_sdk.agent.adapter import extract_text_from_message
         except ImportError:
             raise ImportError(
                 "A2A module not available. Ensure aip_sdk.a2a is properly installed."

@@ -1,6 +1,6 @@
 """Gateway A2A Client - Gateway-mediated Agent Communication."""
 
-from typing import AsyncGenerator, Dict, Optional, Union
+from typing import TYPE_CHECKING, AsyncGenerator, Dict, Optional, Union
 import asyncio
 import logging
 import uuid
@@ -15,10 +15,12 @@ from a2a.types import (
     TaskStatusUpdateEvent,
     JSONRPCRequest,
 )
-from unibase_agent_sdk.a2a import StreamResponse
 
-from aip_sdk.a2a.interface import A2AClientInterface
-from aip_sdk.a2a.envelope import AIPContext, wrap_message
+from aip_sdk.gateway.interface import A2AClientInterface
+from aip_sdk.agent.context import AIPContext, wrap_message
+
+if TYPE_CHECKING:
+    from unibase_agent_sdk.a2a import StreamResponse
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +95,7 @@ class GatewayA2AClient(A2AClientInterface):
         context_id: Optional[str] = None,
         aip_context: Optional[AIPContext] = None,
         stream: bool = False,
-    ) -> Union[Task, AsyncGenerator[StreamResponse, None]]:
+    ) -> Union[Task, AsyncGenerator["StreamResponse", None]]:
         """Send a task through the gateway."""
         # Wrap message with AIP context if provided
         if aip_context:
@@ -171,7 +173,7 @@ class GatewayA2AClient(A2AClientInterface):
         message: Message,
         task_id: str,
         context_id: Optional[str],
-    ) -> AsyncGenerator[StreamResponse, None]:
+    ) -> AsyncGenerator["StreamResponse", None]:
         """Stream task via Push mode."""
         client = await self._get_client()
 
@@ -357,7 +359,7 @@ class GatewayA2AClient(A2AClientInterface):
             for artifact_data in result["artifacts"]:
                 task.artifacts.append(Artifact.from_dict(artifact_data))
 
-    def _parse_stream_response(self, data: Dict) -> StreamResponse:
+    def _parse_stream_response(self, data: Dict) -> "StreamResponse":
         """Parse stream response data."""
         from a2a.types import (
             TaskStatusUpdateEvent,
@@ -365,6 +367,7 @@ class GatewayA2AClient(A2AClientInterface):
             TaskStatus,
             Artifact,
         )
+        from unibase_agent_sdk.a2a import StreamResponse
 
         response = StreamResponse()
 
@@ -462,6 +465,39 @@ class GatewayA2AClient(A2AClientInterface):
             return None
         except Exception as e:
             logger.warning(f"Error getting task {task_id}: {e}")
+            return None
+
+    async def discover_agent(self, endpoint_url: str) -> Optional[AgentCard]:
+        """Discover an agent at a given endpoint via gateway.
+
+        Args:
+            endpoint_url: The endpoint URL of the agent to discover.
+
+        Returns:
+            The AgentCard if discovered, None otherwise.
+        """
+        client = await self._get_client()
+        endpoint_url = endpoint_url.rstrip("/")
+
+        try:
+            # Try to fetch agent card from the endpoint
+            response = await client.get(
+                f"{endpoint_url}/.well-known/agent.json",
+                headers=self._headers,
+            )
+            response.raise_for_status()
+
+            card = AgentCard.from_dict(response.json())
+            # Cache the discovered agent
+            self._agent_cards[card.name] = card
+            logger.info(f"Discovered agent: {card.name} at {endpoint_url}")
+            return card
+
+        except httpx.HTTPStatusError as e:
+            logger.warning(f"Failed to discover agent at {endpoint_url}: HTTP {e.response.status_code}")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to discover agent at {endpoint_url}: {e}")
             return None
 
     async def close(self) -> None:

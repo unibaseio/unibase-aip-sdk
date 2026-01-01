@@ -12,7 +12,7 @@ license = {text = "MIT"}
 authors = [
     {name = "Unibase Team", email = "team@unibase.io"},
 ]
-keywords = ["ai", "agents", "blockchain", "web3", "sdk"]
+keywords = ["ai", "agents", "sdk", "a2a"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -24,12 +24,21 @@ classifiers = [
 ]
 
 dependencies = [
-    # HTTP client
     "httpx>=0.27.0",
-    # Web server
+    "pydantic>=2.0.0",
+    "a2a-sdk>=0.3.10",
+]
+
+[project.optional-dependencies]
+server = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
-    "pydantic>=2.0.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+    "mypy>=1.6.0",
 ]
 
 [project.urls]
@@ -40,3 +49,22 @@ Issues = "https://github.com/unibaseio/unibase-aip-sdk/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["aip_sdk"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
