@@ -1,28 +1,4 @@
-"""
-AIP Client Module
-
-Provides client classes for interacting with the AIP platform.
-
-Example:
-    from aip_sdk import AIPClient
-
-    # Async usage - URL auto-detected from AIP_ENVIRONMENT config
-    async with AIPClient() as client:
-        # List agents
-        agents = await client.list_agents()
-
-        # Run a task
-        async for event in client.run_stream("Plan a trip to Tokyo"):
-            print(event)
-
-        # Or get the final result
-        result = await client.run("What's the weather in SF?")
-        print(result.output)
-
-    # Or specify URL explicitly
-    async with AIPClient("http://api.example.com:8001") as client:
-        ...
-"""
+"""AIP Client Module."""
 
 from __future__ import annotations
 
@@ -87,15 +63,7 @@ class ClientConfig:
 
 
 class AsyncAIPClient:
-    """
-    Async client for interacting with the AIP platform.
-
-    Example:
-        # URL auto-detected from AIP_ENVIRONMENT config
-        async with AsyncAIPClient() as client:
-            result = await client.run("What's the weather?")
-            print(result.output)
-    """
+    """Async client for interacting with the AIP platform."""
 
     def __init__(
         self,
@@ -106,17 +74,7 @@ class AsyncAIPClient:
         headers: Optional[Dict[str, str]] = None,
         config: Optional[ClientConfig] = None,
     ):
-        """
-        Initialize the async AIP client.
-
-        Args:
-            base_url: Base URL of the AIP platform. If not provided, auto-detected
-                     from AIP_SDK_BASE_URL env var or deployment config.
-            timeout: Default timeout for requests
-            stream_timeout: Timeout for streaming requests
-            headers: Additional headers to include in requests
-            config: Full client configuration
-        """
+        """Initialize the async AIP client."""
         if config:
             self.config = config
         else:
@@ -153,12 +111,7 @@ class AsyncAIPClient:
             self._client = None
     
     async def health_check(self) -> bool:
-        """
-        Check if the AIP platform is healthy.
-        
-        Returns:
-            True if healthy, False otherwise
-        """
+        """Check if the AIP platform is healthy."""
         try:
             response = await self.client.get("/healthz")
             return response.status_code == 200
@@ -170,16 +123,7 @@ class AsyncAIPClient:
         max_attempts: int = 30,
         interval: float = 1.0,
     ) -> bool:
-        """
-        Wait for the AIP platform to be ready.
-        
-        Args:
-            max_attempts: Maximum number of attempts
-            interval: Seconds between attempts
-            
-        Returns:
-            True if ready, False if timeout
-        """
+        """Wait for the AIP platform to be ready."""
         for _ in range(max_attempts):
             if await self.health_check():
                 return True
@@ -193,17 +137,7 @@ class AsyncAIPClient:
         limit: int = 100,
         offset: int = 0,
     ) -> PaginatedResponse:
-        """
-        List agents owned by a specific user with pagination.
-
-        Args:
-            user_id: The user's ID
-            limit: Maximum number of agents to return (default: 100)
-            offset: Number of agents to skip (default: 0)
-
-        Returns:
-            PaginatedResponse containing AgentInfo objects
-        """
+        """List agents owned by a specific user with pagination."""
         try:
             response = await self.client.get(
                 f"/users/{user_id}/agents",
@@ -227,16 +161,7 @@ class AsyncAIPClient:
             )
 
     async def get_agent(self, user_id: str, agent_id: str) -> Optional[AgentInfo]:
-        """
-        Get information about a specific agent owned by a user.
-
-        Args:
-            user_id: The user's ID
-            agent_id: The agent's ID
-
-        Returns:
-            Agent information or None if not found
-        """
+        """Get information about a specific agent owned by a user."""
         agents_response = await self.list_user_agents(user_id, limit=1000)
         for agent in agents_response.items:
             if agent.agent_id == agent_id:
@@ -248,25 +173,7 @@ class AsyncAIPClient:
         user_id: str,
         agent: Union[AgentConfig, Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """
-        Register an agent for a specific user.
-
-        Args:
-            user_id: The user ID who will own this agent
-            agent: Agent to register (AgentConfig or dict)
-
-        Returns:
-            Registration result with agent_id, handle, etc.
-
-        Example:
-            >>> config = AgentConfig(
-            ...     name="My Agent",
-            ...     description="A helpful agent",
-            ...     price=0.001
-            ... )
-            >>> result = await client.register_agent("user:0x123...", config)
-            >>> print(result["agent_id"])
-        """
+        """Register an agent for a specific user."""
         if isinstance(agent, AgentConfig):
             reg_data = agent.to_registration_dict()
         else:
@@ -290,23 +197,7 @@ class AsyncAIPClient:
         user_id: str,
         agent_id: str,
     ) -> Dict[str, Any]:
-        """
-        Unregister an agent owned by a user.
-
-        Args:
-            user_id: The user ID who owns the agent
-            agent_id: The agent ID to unregister
-
-        Returns:
-            Unregistration result
-
-        Example:
-            >>> result = await client.unregister_agent(
-            ...     "user:0x123...",
-            ...     "erc8004:my_agent"
-            ... )
-            >>> print(result["status"])  # "unregistered"
-        """
+        """Unregister an agent owned by a user."""
         try:
             response = await self.client.delete(
                 f"/users/{user_id}/agents/{agent_id}"
@@ -327,18 +218,7 @@ class AsyncAIPClient:
         user_id: Optional[str] = None,
         timeout: Optional[float] = None,
     ) -> RunResult:
-        """
-        Execute a task and return the final result.
-        
-        Args:
-            objective: The task objective/description
-            domain_hint: Optional hint for agent routing
-            user_id: Optional user ID for payment
-            timeout: Optional custom timeout
-            
-        Returns:
-            RunResult with status and output
-        """
+        """Execute a task and return the final result."""
         events: List[EventData] = []
         payments: List[Dict[str, Any]] = []
         result = None
@@ -392,19 +272,7 @@ class AsyncAIPClient:
         user_id: Optional[str] = None,
         timeout: Optional[float] = None,
     ) -> AsyncGenerator[EventData, None]:
-        """
-        Execute a task and stream events.
-
-        Args:
-            objective: The task objective/description
-            agent: Optional target agent name/handle for direct routing
-            domain_hint: Optional hint for agent routing
-            user_id: Optional user ID for payment
-            timeout: Optional custom timeout
-
-        Yields:
-            EventData for each streaming event
-        """
+        """Execute a task and stream events."""
         payload: Dict[str, Any] = {"objective": objective}
         if agent:
             payload["agent"] = agent
@@ -458,23 +326,7 @@ class AsyncAIPClient:
         limit: int = 100,
         offset: int = 0,
     ) -> PaginatedResponse:
-        """
-        List all registered users with pagination.
-
-        Args:
-            limit: Maximum number of users to return (default: 100)
-            offset: Number of users to skip (default: 0)
-
-        Returns:
-            PaginatedResponse containing UserInfo objects
-
-        Example:
-            >>> users = await client.list_users(limit=50)
-            >>> for user in users.items:
-            ...     print(user.user_id, user.wallet_address)
-            >>> if users.has_more:
-            ...     next_users = await client.list_users(offset=users.next_offset)
-        """
+        """List all registered users with pagination."""
         response = await self.client.get(
             "/accounts/users",
             params={"limit": limit, "offset": offset},
@@ -499,18 +351,7 @@ class AsyncAIPClient:
         private_key: Optional[str] = None,
         chain_id: int = 97,
     ) -> Dict[str, Any]:
-        """
-        Register a new user.
-        
-        Args:
-            wallet_address: User's wallet address
-            email: Optional email address
-            private_key: Optional private key for on-chain operations
-            chain_id: Blockchain chain ID (default: 97 for BSC testnet)
-            
-        Returns:
-            User registration result
-        """
+        """Register a new user."""
         if private_key:
             response = await self.client.post(
                 "/accounts/users/register-with-key",
@@ -537,20 +378,7 @@ class AsyncAIPClient:
         user_id: str,
         agent_id: str,
     ) -> PriceInfo:
-        """
-        Get pricing for a specific agent owned by a user.
-
-        Args:
-            user_id: The user ID who owns the agent
-            agent_id: The agent ID
-
-        Returns:
-            PriceInfo with pricing details
-
-        Example:
-            >>> price = await client.get_agent_price("user:0x123...", "erc8004:my_agent")
-            >>> print(f"${price.amount} {price.currency}")
-        """
+        """Get pricing for a specific agent owned by a user."""
         response = await self.client.get(
             f"/users/{user_id}/agents/{agent_id}/pricing"
         )
@@ -566,27 +394,7 @@ class AsyncAIPClient:
         currency: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> PriceInfo:
-        """
-        Update pricing for a specific agent owned by a user.
-
-        Args:
-            user_id: The user ID who owns the agent
-            agent_id: The agent ID
-            amount: New price amount
-            currency: Price currency (optional)
-            metadata: Additional metadata (optional)
-
-        Returns:
-            Updated PriceInfo
-
-        Example:
-            >>> price = await client.update_agent_price(
-            ...     "user:0x123...",
-            ...     "erc8004:my_agent",
-            ...     0.002,
-            ...     currency="USD"
-            ... )
-        """
+        """Update pricing for a specific agent owned by a user."""
         payload = {
             "identifier": agent_id,
             "amount": amount,
@@ -609,21 +417,7 @@ class AsyncAIPClient:
         limit: int = 100,
         offset: int = 0,
     ) -> PaginatedResponse:
-        """
-        List agent prices with pagination.
-
-        Args:
-            limit: Maximum number of prices to return (default: 100)
-            offset: Number of prices to skip (default: 0)
-
-        Returns:
-            PaginatedResponse containing PriceInfo objects
-
-        Example:
-            >>> prices = await client.list_agent_prices(limit=50)
-            >>> for price in prices.items:
-            ...     print(f"{price.identifier}: ${price.amount}")
-        """
+        """List agent prices with pagination."""
         response = await self.client.get(
             "/pricing/agents",
             params={"limit": limit, "offset": offset},
@@ -647,22 +441,7 @@ class AsyncAIPClient:
         limit: int = 100,
         offset: int = 0,
     ) -> PaginatedResponse:
-        """
-        List runs for a specific user with pagination.
-
-        Args:
-            user_id: The user's ID
-            limit: Maximum number of runs to return (default: 100)
-            offset: Number of runs to skip (default: 0)
-
-        Returns:
-            PaginatedResponse containing run information
-
-        Example:
-            >>> runs = await client.list_user_runs("user:0x123...", limit=20)
-            >>> for run in runs.items:
-            ...     print(f"Run {run['run_id']}: {run.get('status', 'unknown')}")
-        """
+        """List runs for a specific user with pagination."""
         response = await self.client.get(
             f"/users/{user_id}/runs",
             params={"limit": limit, "offset": offset},
@@ -678,48 +457,19 @@ class AsyncAIPClient:
         )
     
     async def get_run_events(self, run_id: str) -> List[Dict[str, Any]]:
-        """
-        Get events for a specific run.
-        
-        Args:
-            run_id: The run ID
-            
-        Returns:
-            List of events
-        """
+        """Get events for a specific run."""
         response = await self.client.get(f"/runs/{run_id}/events")
         response.raise_for_status()
         return response.json()
     
     async def get_run_payments(self, run_id: str) -> List[Dict[str, Any]]:
-        """
-        Get payments for a specific run.
-        
-        Args:
-            run_id: The run ID
-            
-        Returns:
-            List of payments
-        """
+        """Get payments for a specific run."""
         response = await self.client.get(f"/runs/{run_id}/payments")
         response.raise_for_status()
         return response.json()
     
 class AIPClient:
-    """
-    Synchronous wrapper around AsyncAIPClient.
-
-    Example:
-        # URL auto-detected from AIP_ENVIRONMENT config
-        client = AIPClient()
-
-        # List agents
-        agents = client.list_agents()
-
-        # Run a task
-        result = client.run("What's the weather?")
-        print(result.output)
-    """
+    """Synchronous wrapper around AsyncAIPClient."""
 
     def __init__(
         self,
@@ -729,16 +479,7 @@ class AIPClient:
         stream_timeout: float = 300.0,
         headers: Optional[Dict[str, str]] = None,
     ):
-        """
-        Initialize the AIP client.
-
-        Args:
-            base_url: Base URL of the AIP platform. If not provided, auto-detected
-                     from AIP_SDK_BASE_URL env var or deployment config.
-            timeout: Default timeout for requests
-            stream_timeout: Timeout for streaming requests
-            headers: Additional headers to include in requests
-        """
+        """Initialize the AIP client."""
         self._async_client = AsyncAIPClient(
             base_url=base_url,
             timeout=timeout,

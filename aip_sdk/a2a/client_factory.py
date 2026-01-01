@@ -1,24 +1,10 @@
-"""A2A Client Factory - Unified Client Creation and Routing.
-
-This factory provides a single entry point for creating A2A clients,
-automatically routing requests to the appropriate transport:
-- LocalA2AClient for in-process agents
-- HttpA2AClient for direct HTTP connections
-- GatewayA2AClient for gateway-mediated connections
-
-The factory maintains a registry of local agents and discovered remote
-agents, enabling transparent routing regardless of agent location.
-"""
+"""A2A Client Factory - Unified Client Creation and Routing."""
 
 from typing import AsyncGenerator, Dict, Optional, Union
 import logging
 
-from unibase_agent_sdk.a2a.types import (
-    Task,
-    Message,
-    AgentCard,
-    StreamResponse,
-)
+from a2a.types import Task, Message, AgentCard
+from unibase_agent_sdk.a2a import StreamResponse
 
 from aip_sdk.a2a.interface import A2AClientInterface, TaskHandler
 from aip_sdk.a2a.envelope import AIPContext
@@ -31,41 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class A2AClientFactory(A2AClientInterface):
-    """Factory for A2A clients with automatic routing.
-
-    This factory implements A2AClientInterface directly, routing calls
-    to the appropriate underlying client based on agent location.
-
-    Routing Logic:
-    1. Check if agent is registered locally -> LocalA2AClient
-    2. Check if agent has known endpoint -> HttpA2AClient
-    3. Check if gateway is configured -> GatewayA2AClient
-    4. Raise AgentNotFoundError
-
-    Features:
-    - Automatic client selection based on agent location
-    - Local agent registration and lookup
-    - Remote agent endpoint caching
-    - Gateway fallback for unknown agents
-    - Unified interface for all agent communication
-
-    Example:
-        factory = A2AClientFactory()
-
-        # Register a local agent
-        factory.register_local_agent(
-            agent_id="calculator",
-            task_handler=calculator_handler,
-            agent_card=calculator_card,
-        )
-
-        # Send task - automatically routes to local client
-        message = Message.user("What is 2+2?")
-        task = await factory.send_task("calculator", message)
-
-        # Or to a remote agent - routes through gateway
-        task = await factory.send_task("remote-agent", message)
-    """
+    """Factory for A2A clients with automatic routing."""
 
     def __init__(
         self,
@@ -75,14 +27,7 @@ class A2AClientFactory(A2AClientInterface):
         default_timeout: float = 30.0,
         headers: Optional[Dict[str, str]] = None,
     ):
-        """Initialize the A2A client factory.
-
-        Args:
-            gateway_url: Optional gateway URL for remote agents
-            gateway_mode: Gateway mode ("push" or "pull")
-            default_timeout: Default request timeout in seconds
-            headers: Default headers for HTTP requests
-        """
+        """Initialize the A2A client factory."""
         self._gateway_url = gateway_url
         self._gateway_mode = gateway_mode
         self._default_timeout = default_timeout
@@ -108,12 +53,7 @@ class A2AClientFactory(A2AClientInterface):
         return self._gateway_url
 
     def set_gateway(self, gateway_url: str, mode: str = "push") -> None:
-        """Configure the gateway for remote agents.
-
-        Args:
-            gateway_url: Gateway URL
-            mode: Gateway mode ("push" or "pull")
-        """
+        """Configure the gateway for remote agents."""
         self._gateway_url = gateway_url
         self._gateway_mode = mode
         # Reset gateway client to pick up new config
@@ -130,15 +70,7 @@ class A2AClientFactory(A2AClientInterface):
         endpoint_url: Optional[str] = None,
         agent_instance: Optional[object] = None,
     ) -> None:
-        """Register a local agent.
-
-        Args:
-            agent_id: Unique agent identifier
-            task_handler: A2A TaskHandler for this agent
-            agent_card: Agent capabilities description
-            endpoint_url: Optional HTTP endpoint if also exposed remotely
-            agent_instance: Optional reference to Agent object
-        """
+        """Register a local agent."""
         self._registry.register_local(
             agent_id=agent_id,
             task_handler=task_handler,
@@ -149,25 +81,11 @@ class A2AClientFactory(A2AClientInterface):
         logger.info(f"Registered local agent: {agent_id}")
 
     def unregister_local_agent(self, agent_id: str) -> bool:
-        """Unregister a local agent.
-
-        Args:
-            agent_id: Agent to unregister
-
-        Returns:
-            True if agent was found and removed
-        """
+        """Unregister a local agent."""
         return self._registry.unregister_local(agent_id)
 
     def is_local(self, agent_id: str) -> bool:
-        """Check if an agent is registered locally.
-
-        Args:
-            agent_id: Agent identifier
-
-        Returns:
-            True if agent is local
-        """
+        """Check if an agent is registered locally."""
         return self._registry.is_local(agent_id)
 
     # Remote agent management
@@ -178,13 +96,7 @@ class A2AClientFactory(A2AClientInterface):
         endpoint_url: str,
         agent_card: Optional[AgentCard] = None,
     ) -> None:
-        """Register a known remote agent endpoint.
-
-        Args:
-            agent_id: Agent identifier
-            endpoint_url: HTTP endpoint URL
-            agent_card: Optional agent card (will be fetched if not provided)
-        """
+        """Register a known remote agent endpoint."""
         if agent_card:
             self._registry.cache_remote_agent(
                 agent_id=agent_id,
@@ -223,17 +135,7 @@ class A2AClientFactory(A2AClientInterface):
         return self._gateway_client
 
     def _get_client_for_agent(self, agent_id: str) -> A2AClientInterface:
-        """Get the appropriate client for an agent.
-
-        Args:
-            agent_id: Agent identifier
-
-        Returns:
-            A2AClientInterface for the agent
-
-        Raises:
-            ValueError: If no client can be found for the agent
-        """
+        """Get the appropriate client for an agent."""
         # 1. Check if local
         if self._registry.is_local(agent_id):
             logger.debug(f"Routing {agent_id} to LocalA2AClient")
@@ -273,22 +175,7 @@ class A2AClientFactory(A2AClientInterface):
         aip_context: Optional[AIPContext] = None,
         stream: bool = False,
     ) -> Union[Task, AsyncGenerator[StreamResponse, None]]:
-        """Send a task to an agent, automatically routing to the right client.
-
-        Args:
-            agent_id: Target agent identifier
-            message: A2A message to send
-            task_id: Optional task ID
-            context_id: Optional context ID
-            aip_context: Optional AIP context
-            stream: Whether to stream responses
-
-        Returns:
-            Task if stream=False, AsyncGenerator if stream=True
-
-        Raises:
-            ValueError: If no client is available for the agent
-        """
+        """Send a task to an agent, automatically routing to the right client."""
         client = self._get_client_for_agent(agent_id)
         return await client.send_task(
             agent_id=agent_id,
@@ -300,14 +187,7 @@ class A2AClientFactory(A2AClientInterface):
         )
 
     async def get_agent_card(self, agent_id: str) -> Optional[AgentCard]:
-        """Get agent card, checking local registry first.
-
-        Args:
-            agent_id: Agent identifier
-
-        Returns:
-            AgentCard if found, None otherwise
-        """
+        """Get agent card, checking local registry first."""
         # Check local registry
         card = self._registry.get_agent_card(agent_id)
         if card:
@@ -327,15 +207,7 @@ class A2AClientFactory(A2AClientInterface):
             return None
 
     async def cancel_task(self, agent_id: str, task_id: str) -> bool:
-        """Cancel a task on an agent.
-
-        Args:
-            agent_id: Agent identifier
-            task_id: Task to cancel
-
-        Returns:
-            True if cancellation was accepted
-        """
+        """Cancel a task on an agent."""
         try:
             client = self._get_client_for_agent(agent_id)
             return await client.cancel_task(agent_id, task_id)
@@ -343,15 +215,7 @@ class A2AClientFactory(A2AClientInterface):
             return False
 
     async def get_task(self, agent_id: str, task_id: str) -> Optional[Task]:
-        """Get current task state.
-
-        Args:
-            agent_id: Agent identifier
-            task_id: Task identifier
-
-        Returns:
-            Task if found, None otherwise
-        """
+        """Get current task state."""
         try:
             client = self._get_client_for_agent(agent_id)
             return await client.get_task(agent_id, task_id)
@@ -375,30 +239,15 @@ class A2AClientFactory(A2AClientInterface):
     # Convenience methods
 
     def get_local_agent_ids(self) -> list[str]:
-        """Get IDs of all local agents.
-
-        Returns:
-            List of local agent IDs
-        """
+        """Get IDs of all local agents."""
         return self._registry.get_local_agent_ids()
 
     def list_local_agents(self):
-        """List all local agents.
-
-        Returns:
-            List of LocalAgentInfo objects
-        """
+        """List all local agents."""
         return self._registry.list_local_agents()
 
     async def discover_agent(self, endpoint_url: str) -> Optional[AgentCard]:
-        """Discover an agent at a given endpoint.
-
-        Args:
-            endpoint_url: URL to discover agent at
-
-        Returns:
-            AgentCard if found, None otherwise
-        """
+        """Discover an agent at a given endpoint."""
         client = HttpA2AClient(
             base_url=endpoint_url,
             timeout=self._default_timeout,

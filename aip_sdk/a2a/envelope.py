@@ -1,16 +1,9 @@
-"""AIP Context Envelope for A2A Messages.
-
-This module provides the AIPContext class which embeds AIP system context
-(payment tracking, event bus, memory scope) into A2A messages via metadata.
-
-This allows A2A messages to carry AIP-specific information without breaking
-the standard A2A protocol.
-"""
+"""AIP Context Envelope for A2A Messages."""
 
 from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List, Optional, Tuple
 
-from unibase_agent_sdk.a2a.types import Message
+from a2a.types import Message
 
 
 @dataclass
@@ -31,23 +24,7 @@ class PaymentContextData:
 
 @dataclass
 class AIPContext:
-    """AIP system context embedded in A2A message metadata.
-
-    This context travels with A2A messages to enable:
-    - Payment tracking across agent calls
-    - Event bus correlation
-    - Memory scope isolation
-    - Call chain tracing
-
-    Attributes:
-        run_id: Unique identifier for the entire run/session
-        caller_agent: Agent that initiated this call
-        caller_chain: Full chain of agents in the call stack
-        payment_context: Payment tracking information
-        memory_scope: Scope identifier for memory isolation
-        event_bus_id: Event bus identifier for event correlation
-        metadata: Additional custom metadata
-    """
+    """AIP system context embedded in A2A message metadata."""
     run_id: str
     caller_agent: str
     caller_chain: List[str] = field(default_factory=list)
@@ -88,16 +65,7 @@ class AIPContext:
         )
 
     def spawn_child(self, target_agent: str) -> "AIPContext":
-        """Create a child context for delegating to another agent.
-
-        This maintains the call chain and updates payment tracking.
-
-        Args:
-            target_agent: The agent being called
-
-        Returns:
-            New AIPContext with updated call chain
-        """
+        """Create a child context for delegating to another agent."""
         new_chain = self.caller_chain + [self.caller_agent]
 
         child_payment = None
@@ -128,18 +96,7 @@ def wrap_message(
     message: Message,
     aip_context: AIPContext,
 ) -> Message:
-    """Embed AIP context into an A2A message's metadata.
-
-    This wraps the message with AIP-specific context while preserving
-    any existing metadata.
-
-    Args:
-        message: The A2A message to wrap
-        aip_context: AIP context to embed
-
-    Returns:
-        New Message with AIP context in metadata
-    """
+    """Embed AIP context into an A2A message's metadata."""
     existing_metadata = message.metadata or {}
     new_metadata = {
         **existing_metadata,
@@ -154,14 +111,7 @@ def wrap_message(
 
 
 def unwrap_message(message: Message) -> Tuple[Message, Optional[AIPContext]]:
-    """Extract AIP context from an A2A message.
-
-    Args:
-        message: The A2A message to unwrap
-
-    Returns:
-        Tuple of (message without AIP context, extracted AIPContext or None)
-    """
+    """Extract AIP context from an A2A message."""
     if not message.metadata:
         return message, None
 
@@ -180,14 +130,7 @@ def unwrap_message(message: Message) -> Tuple[Message, Optional[AIPContext]]:
 
 
 def extract_aip_context(message: Message) -> Optional[AIPContext]:
-    """Extract AIP context from message without modifying it.
-
-    Args:
-        message: The A2A message
-
-    Returns:
-        AIPContext if present, None otherwise
-    """
+    """Extract AIP context from message without modifying it."""
     if not message.metadata:
         return None
 

@@ -1,8 +1,4 @@
-"""
-SDK Type Definitions
-
-Core data types used throughout the SDK for type safety and documentation.
-"""
+"""SDK Type Definitions."""
 
 from __future__ import annotations
 
@@ -111,19 +107,7 @@ class SkillConfig:
 
 @dataclass
 class CostModel:
-    """Agent cost model configuration for SDK use.
-
-    This is a simplified cost model for agent developers to specify basic pricing.
-    It intentionally has fewer fields than the platform's CostModel (in aip.core.accounts.models)
-    which includes additional fee types (per_use_fee, per_write_fee, per_token_fee, custom_fees).
-
-    For most agent use cases, base_call_fee and per_agent_call_fee are sufficient.
-    The platform will handle any necessary conversions internally.
-
-    Args:
-        base_call_fee: Fixed fee charged per call to this agent
-        per_agent_call_fee: Additional fee when this agent calls other agents
-    """
+    """Agent cost model configuration for SDK use."""
     base_call_fee: float = 0.0
     per_agent_call_fee: float = 0.0
 
@@ -227,18 +211,7 @@ class AgentContext:
         payload: Dict[str, Any],
         reason: str = "",
     ) -> TaskResult:
-        """
-        Call another agent with a task.
-
-        Args:
-            agent_id: The ID of the agent to call
-            task_name: Name of the task to execute
-            payload: Task payload/parameters
-            reason: Reason for the call (for logging)
-
-        Returns:
-            TaskResult from the called agent
-        """
+        """Call another agent with a task."""
         from uuid import uuid4
         task = Task(
             task_id=str(uuid4()),
@@ -257,25 +230,11 @@ class AgentContext:
         return result
 
     def log(self, event_type: str, **data: Any) -> None:
-        """
-        Log an event.
-        
-        Args:
-            event_type: Type of event (e.g., "agent.processing")
-            **data: Additional event data
-        """
+        """Log an event."""
         self.emit_event({"type": event_type, **data})
 
     async def read(self, scope: str) -> Dict[str, Any]:
-        """
-        Read from agent memory.
-        
-        Args:
-            scope: Memory scope to read from
-            
-        Returns:
-            Memory contents
-        """
+        """Read from agent memory."""
         return self.memory_read(scope)
 
     async def write(
@@ -284,14 +243,7 @@ class AgentContext:
         data: Dict[str, Any],
         description: str = "",
     ) -> None:
-        """
-        Write to agent memory.
-        
-        Args:
-            scope: Memory scope to write to
-            data: Data to store
-            description: Description of what was written
-        """
+        """Write to agent memory."""
         self.memory_write(scope, data, description)
 
     @classmethod
@@ -319,36 +271,9 @@ class AgentContext:
         memory_read: Optional[Callable[[str], Dict[str, Any]]] = None,
         memory_write: Optional[Callable[[str, Dict[str, Any], str], None]] = None,
     ) -> "AgentContext":
-        """Create AgentContext with A2A-based invoke_agent.
-
-        This creates an AgentContext where inter-agent calls use the A2A
-        protocol via the provided factory.
-
-        Args:
-            factory: A2AClientFactory for routing agent calls
-            run_id: Current run ID for context
-            caller_agent: Agent ID that will use this context
-            emit_event: Optional event emission callback
-            send_message: Optional message send callback
-            receive_message: Optional message receive callback
-            memory_read: Optional memory read callback
-            memory_write: Optional memory write callback
-
-        Returns:
-            AgentContext with A2A-based invoke_agent
-
-        Example:
-            from aip_sdk.a2a import A2AClientFactory
-
-            factory = A2AClientFactory()
-            context = AgentContext.from_a2a_factory(
-                factory=factory,
-                run_id="run-123",
-                caller_agent="my-agent",
-            )
-        """
+        """Create AgentContext with A2A-based invoke_agent."""
         import json
-        from unibase_agent_sdk.a2a.types import Message, TaskState, Role
+        from a2a.types import Message, TaskState, Role
 
         try:
             from aip_sdk.a2a.envelope import AIPContext, PaymentContextData

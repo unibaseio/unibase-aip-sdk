@@ -1,8 +1,4 @@
-"""A2A Client Interface and Task Handler Types.
-
-Defines the abstract interface for all A2A clients and the TaskHandler type
-that agents must implement.
-"""
+"""A2A Client Interface and Task Handler Types."""
 
 from abc import ABC, abstractmethod
 from typing import (
@@ -13,12 +9,8 @@ from typing import (
     Union,
 )
 
-from unibase_agent_sdk.a2a.types import (
-    Task,
-    Message,
-    AgentCard,
-    StreamResponse,
-)
+from a2a.types import Task, Message, AgentCard
+from unibase_agent_sdk.a2a import StreamResponse
 
 from aip_sdk.a2a.envelope import AIPContext
 
@@ -29,11 +21,7 @@ TaskHandler = Callable[[Task], AsyncGenerator[StreamResponse, None]]
 
 
 class A2AClientInterface(ABC):
-    """Abstract interface for A2A clients.
-
-    All A2A clients (local, HTTP, gateway) implement this interface,
-    enabling the factory to transparently route to the appropriate transport.
-    """
+    """Abstract interface for A2A clients."""
 
     @abstractmethod
     async def send_task(
@@ -46,57 +34,22 @@ class A2AClientInterface(ABC):
         aip_context: Optional[AIPContext] = None,
         stream: bool = False,
     ) -> Union[Task, AsyncGenerator[StreamResponse, None]]:
-        """Send a task to an agent.
-
-        Args:
-            agent_id: Target agent identifier
-            message: A2A message to send
-            task_id: Optional task ID (auto-generated if not provided)
-            context_id: Optional context ID for grouping related tasks
-            aip_context: Optional AIP context for payment/event tracking
-            stream: Whether to return streaming response
-
-        Returns:
-            Task if stream=False, AsyncGenerator of StreamResponse if stream=True
-        """
+        """Send a task to an agent."""
         ...
 
     @abstractmethod
     async def get_agent_card(self, agent_id: str) -> Optional[AgentCard]:
-        """Get the agent card (capabilities) for an agent.
-
-        Args:
-            agent_id: Agent identifier
-
-        Returns:
-            AgentCard if found, None otherwise
-        """
+        """Get the agent card (capabilities) for an agent."""
         ...
 
     @abstractmethod
     async def cancel_task(self, agent_id: str, task_id: str) -> bool:
-        """Request cancellation of a task.
-
-        Args:
-            agent_id: Agent that owns the task
-            task_id: Task to cancel
-
-        Returns:
-            True if cancellation was accepted
-        """
+        """Request cancellation of a task."""
         ...
 
     @abstractmethod
     async def get_task(self, agent_id: str, task_id: str) -> Optional[Task]:
-        """Get current state of a task.
-
-        Args:
-            agent_id: Agent that owns the task
-            task_id: Task to retrieve
-
-        Returns:
-            Task if found, None otherwise
-        """
+        """Get current state of a task."""
         ...
 
     async def close(self) -> None:

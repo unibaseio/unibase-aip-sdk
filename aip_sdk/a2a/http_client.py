@@ -1,29 +1,13 @@
-"""HTTP A2A Client - Remote Agent Communication.
-
-This client implements the A2A protocol for remote agents via HTTP,
-wrapping the SDK's A2AClient with AIP-specific functionality.
-
-Features:
-- Standard A2A protocol over HTTP/SSE
-- AIP context embedding in message metadata
-- Agent discovery via /.well-known/agent.json
-- Streaming and non-streaming task execution
-"""
+"""HTTP A2A Client - Remote Agent Communication."""
 
 from typing import AsyncGenerator, Dict, Optional, Union
 import logging
 
-from unibase_agent_sdk.a2a.types import (
-    Task,
-    Message,
-    AgentCard,
-    StreamResponse,
-)
-from unibase_agent_sdk.a2a.client import (
-    A2AClient,
-    A2AClientError,
-    TaskExecutionError,
-)
+from a2a.types import Task, Message, AgentCard
+from unibase_agent_sdk.a2a import StreamResponse, A2AClient, AgentDiscoveryError, TaskExecutionError
+
+# Alias for backward compatibility
+A2AClientError = AgentDiscoveryError
 
 from aip_sdk.a2a.interface import A2AClientInterface
 from aip_sdk.a2a.envelope import AIPContext, wrap_message
@@ -32,24 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class HttpA2AClient(A2AClientInterface):
-    """A2A client for remote agents via HTTP.
-
-    This client communicates with remote A2A-compliant agents over HTTP,
-    using JSON-RPC 2.0 for requests and SSE for streaming responses.
-
-    Features:
-    - Implements A2AClientInterface for unified client usage
-    - Embeds AIP context in A2A message metadata
-    - Caches discovered agent cards
-    - Supports streaming via SSE
-
-    Example:
-        client = HttpA2AClient("https://agent.example.com")
-
-        message = Message.user("What is the weather?")
-        task = await client.send_task("weather-agent", message)
-        print(task.status.state)
-    """
+    """A2A client for remote agents via HTTP."""
 
     def __init__(
         self,
@@ -58,13 +25,7 @@ class HttpA2AClient(A2AClientInterface):
         timeout: float = 30.0,
         headers: Optional[Dict[str, str]] = None,
     ):
-        """Initialize HTTP A2A client.
-
-        Args:
-            base_url: Base URL for the agent (or gateway)
-            timeout: Request timeout in seconds
-            headers: Additional headers to include in requests
-        """
+        """Initialize HTTP A2A client."""
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._headers = headers or {}
@@ -88,14 +49,7 @@ class HttpA2AClient(A2AClientInterface):
         return self._client
 
     def _get_agent_url(self, agent_id: str) -> str:
-        """Get the endpoint URL for an agent.
-
-        Args:
-            agent_id: Agent identifier
-
-        Returns:
-            Full URL for the agent's A2A endpoint
-        """
+        """Get the endpoint URL for an agent."""
         # Check if we have a specific endpoint for this agent
         if agent_id in self._agent_endpoints:
             return self._agent_endpoints[agent_id]
@@ -103,12 +57,7 @@ class HttpA2AClient(A2AClientInterface):
         return self._base_url
 
     def set_agent_endpoint(self, agent_id: str, endpoint_url: str) -> None:
-        """Set the endpoint URL for a specific agent.
-
-        Args:
-            agent_id: Agent identifier
-            endpoint_url: Full URL for the agent's A2A endpoint
-        """
+        """Set the endpoint URL for a specific agent."""
         self._agent_endpoints[agent_id] = endpoint_url.rstrip("/")
 
     async def send_task(
@@ -121,22 +70,7 @@ class HttpA2AClient(A2AClientInterface):
         aip_context: Optional[AIPContext] = None,
         stream: bool = False,
     ) -> Union[Task, AsyncGenerator[StreamResponse, None]]:
-        """Send a task to a remote agent via HTTP.
-
-        Args:
-            agent_id: Target agent identifier
-            message: A2A message to send
-            task_id: Optional task ID (auto-generated if not provided)
-            context_id: Optional context ID for grouping
-            aip_context: Optional AIP context for payment/event tracking
-            stream: Whether to return streaming response
-
-        Returns:
-            Task if stream=False, AsyncGenerator if stream=True
-
-        Raises:
-            TaskExecutionError: If task execution fails
-        """
+        """Send a task to a remote agent via HTTP."""
         client = await self._get_client()
         agent_url = self._get_agent_url(agent_id)
 
@@ -168,18 +102,7 @@ class HttpA2AClient(A2AClientInterface):
         task_id: Optional[str],
         context_id: Optional[str],
     ) -> AsyncGenerator[StreamResponse, None]:
-        """Stream responses from a remote agent.
-
-        Args:
-            client: The A2A client
-            agent_url: Agent endpoint URL
-            message: Message to send
-            task_id: Optional task ID
-            context_id: Optional context ID
-
-        Yields:
-            StreamResponse events from the agent
-        """
+        """Stream responses from a remote agent."""
         async for response in client.stream_task(
             agent_url=agent_url,
             message=message,
@@ -189,14 +112,7 @@ class HttpA2AClient(A2AClientInterface):
             yield response
 
     async def get_agent_card(self, agent_id: str) -> Optional[AgentCard]:
-        """Get agent card for a remote agent.
-
-        Args:
-            agent_id: Agent identifier
-
-        Returns:
-            AgentCard if agent exists, None otherwise
-        """
+        """Get agent card for a remote agent."""
         client = await self._get_client()
         agent_url = self._get_agent_url(agent_id)
 
@@ -207,15 +123,7 @@ class HttpA2AClient(A2AClientInterface):
             return None
 
     async def cancel_task(self, agent_id: str, task_id: str) -> bool:
-        """Request task cancellation on a remote agent.
-
-        Args:
-            agent_id: Agent identifier
-            task_id: Task to cancel
-
-        Returns:
-            True if cancellation was accepted
-        """
+        """Request task cancellation on a remote agent."""
         client = await self._get_client()
         agent_url = self._get_agent_url(agent_id)
 
@@ -227,15 +135,7 @@ class HttpA2AClient(A2AClientInterface):
             return False
 
     async def get_task(self, agent_id: str, task_id: str) -> Optional[Task]:
-        """Get current task state from a remote agent.
-
-        Args:
-            agent_id: Agent identifier
-            task_id: Task identifier
-
-        Returns:
-            Task if found, None otherwise
-        """
+        """Get current task state from a remote agent."""
         client = await self._get_client()
         agent_url = self._get_agent_url(agent_id)
 

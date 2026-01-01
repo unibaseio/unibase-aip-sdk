@@ -1,19 +1,4 @@
-"""
-Gateway Client for AIP SDK
-
-Helper utilities for agents to register with a gateway.
-
-Example:
-    from aip_sdk.gateway_client import GatewayClient
-
-    # URL auto-detected from AIP_ENVIRONMENT config
-    client = GatewayClient()
-    result = await client.register_agent("calculator", "http://localhost:8103")
-    print(f"Agent accessible at: {result['gateway_url']}")
-
-    # Or specify explicitly
-    client = GatewayClient("http://gateway.example.com:8080")
-"""
+"""Gateway Client for AIP SDK."""
 
 import logging
 import os
@@ -36,14 +21,7 @@ class GatewayClient:
     """Client for interacting with the Agent Gateway."""
 
     def __init__(self, gateway_url: Optional[str] = None, timeout: float = 10.0):
-        """
-        Initialize gateway client.
-
-        Args:
-            gateway_url: Base URL of the gateway. If not provided, auto-detected
-                        from GATEWAY_URL env var or deployment config.
-            timeout: Request timeout in seconds
-        """
+        """Initialize gateway client."""
         self.gateway_url = (gateway_url or _get_default_gateway_url()).rstrip('/')
         self.timeout = timeout
 
@@ -54,21 +32,7 @@ class GatewayClient:
         metadata: Optional[Dict[str, Any]] = None,
         force: bool = False
     ) -> Dict[str, Any]:
-        """
-        Register an agent with the gateway.
-
-        Args:
-            agent_name: Unique agent identifier
-            backend_url: Backend agent URL (e.g., http://localhost:8103)
-            metadata: Optional metadata dictionary
-            force: Force re-registration if agent already exists
-
-        Returns:
-            Registration response with gateway_url and path
-
-        Raises:
-            httpx.HTTPStatusError: If registration fails
-        """
+        """Register an agent with the gateway."""
         url = f"{self.gateway_url}/gateway/register"
         payload = {
             "agent_name": agent_name,
@@ -92,18 +56,7 @@ class GatewayClient:
             return result
 
     async def unregister_agent(self, agent_name: str) -> Dict[str, Any]:
-        """
-        Unregister an agent from the gateway.
-
-        Args:
-            agent_name: Agent identifier to unregister
-
-        Returns:
-            Unregistration response
-
-        Raises:
-            httpx.HTTPStatusError: If unregistration fails
-        """
+        """Unregister an agent from the gateway."""
         url = f"{self.gateway_url}/gateway/unregister/{agent_name}"
 
         async with httpx.AsyncClient() as client:
@@ -115,15 +68,7 @@ class GatewayClient:
             return result
 
     async def list_agents(self) -> List[Dict[str, Any]]:
-        """
-        List all registered agents.
-
-        Returns:
-            List of agent information dictionaries
-
-        Raises:
-            httpx.HTTPStatusError: If request fails
-        """
+        """List all registered agents."""
         url = f"{self.gateway_url}/gateway/agents"
 
         async with httpx.AsyncClient() as client:
@@ -134,18 +79,7 @@ class GatewayClient:
             return result.get("agents", [])
 
     async def get_agent_info(self, agent_name: str) -> Dict[str, Any]:
-        """
-        Get information about a specific agent.
-
-        Args:
-            agent_name: Agent identifier
-
-        Returns:
-            Agent information dictionary
-
-        Raises:
-            httpx.HTTPStatusError: If request fails or agent not found
-        """
+        """Get information about a specific agent."""
         url = f"{self.gateway_url}/gateway/agents/{agent_name}"
 
         async with httpx.AsyncClient() as client:
@@ -154,12 +88,7 @@ class GatewayClient:
             return response.json()
 
     async def health_check(self) -> bool:
-        """
-        Check if gateway is reachable and healthy.
-
-        Returns:
-            True if gateway is healthy, False otherwise
-        """
+        """Check if gateway is reachable and healthy."""
         url = f"{self.gateway_url}/gateway/health"
 
         try:
@@ -173,16 +102,7 @@ class GatewayClient:
             return False
 
     async def wait_for_gateway(self, max_attempts: int = 30, interval: float = 1.0) -> bool:
-        """
-        Wait for gateway to become available.
-
-        Args:
-            max_attempts: Maximum number of attempts
-            interval: Seconds between attempts
-
-        Returns:
-            True if gateway became available, False if timeout
-        """
+        """Wait for gateway to become available."""
         import asyncio
 
         for attempt in range(max_attempts):

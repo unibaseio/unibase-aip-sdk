@@ -1,20 +1,4 @@
-"""
-External Agent Client SDK
-
-Allows agents to run anywhere (local machine, behind firewall) and connect
-to a remote gateway using the task queue pull model.
-
-Example:
-    from aip_sdk.external_agent_client import ExternalAgentClient
-
-    class MyAgent(ExternalAgentClient):
-        async def execute_task(self, payload):
-            # Your agent logic
-            return {"result": "done"}
-
-    agent = MyAgent("my_agent", "https://gateway.example.com")
-    await agent.run()
-"""
+"""External Agent Client SDK."""
 
 import asyncio
 import httpx
@@ -46,16 +30,7 @@ def _get_default_gateway_url() -> str:
 
 
 class ExternalAgentClient(ABC):
-    """
-    Base class for external agents that pull tasks from gateway.
-
-    Agents extend this class and implement execute_task() method.
-    The client handles:
-    - Registration with gateway
-    - Task polling (long-polling)
-    - Heartbeat management
-    - Error handling and retries
-    """
+    """Base class for external agents that pull tasks from gateway."""
 
     def __init__(
         self,
@@ -66,17 +41,7 @@ class ExternalAgentClient(ABC):
         capabilities: Optional[List[str]] = None,
         metadata: Optional[Dict] = None
     ):
-        """
-        Initialize external agent client.
-
-        Args:
-            agent_name: Unique agent identifier
-            gateway_url: Gateway URL (e.g., https://gateway.example.com)
-            poll_interval: Seconds between polls when no tasks (default: 5s)
-            heartbeat_interval: Seconds between heartbeats (default: 30s)
-            capabilities: List of agent capabilities
-            metadata: Additional metadata about the agent
-        """
+        """Initialize external agent client."""
         self.agent_name = agent_name
         self.gateway_url = gateway_url.rstrip('/')
         self.poll_interval = poll_interval
@@ -189,15 +154,7 @@ class ExternalAgentClient(ABC):
             raise
 
     async def poll_task(self, timeout: float = 30.0) -> Optional[Dict]:
-        """
-        Poll for next task (long-polling).
-
-        Args:
-            timeout: Long-poll timeout in seconds
-
-        Returns:
-            Task dict if available, None otherwise
-        """
+        """Poll for next task (long-polling)."""
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
@@ -232,16 +189,7 @@ class ExternalAgentClient(ABC):
         error: Optional[str] = None,
         execution_time: Optional[float] = None
     ):
-        """
-        Report task completion to gateway.
-
-        Args:
-            task_id: Task identifier
-            result: Task result (dict)
-            status: Task status (completed or failed)
-            error: Error message if failed
-            execution_time: Execution time in seconds
-        """
+        """Report task completion to gateway."""
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -306,31 +254,11 @@ class ExternalAgentClient(ABC):
 
     @abstractmethod
     async def execute_task(self, payload: Dict) -> Dict:
-        """
-        Execute a task. Must be implemented by subclass.
-
-        Args:
-            payload: Task payload from gateway
-
-        Returns:
-            Task result as dict
-
-        Raises:
-            Exception if task fails
-        """
+        """Execute a task. Must be implemented by subclass."""
         raise NotImplementedError("Subclass must implement execute_task()")
 
     async def run(self):
-        """
-        Main loop: poll for tasks and execute them.
-
-        This is the main entry point for the agent. It:
-        1. Registers with gateway
-        2. Starts heartbeat loop
-        3. Polls for tasks
-        4. Executes tasks
-        5. Reports results
-        """
+        """Main loop: poll for tasks and execute them."""
         try:
             # Register with gateway
             await self.register()

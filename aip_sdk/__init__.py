@@ -1,22 +1,4 @@
-"""
-Unibase AIP SDK
-
-SDK for building AI agents on the Unibase Agent Interoperability Protocol.
-
-RECOMMENDED: Use unibase_agent_sdk for new projects:
-
-    from unibase_agent_sdk import expose_as_a2a
-
-    def my_handler(text: str) -> str:
-        return f"Hello: {text}"
-
-    server = expose_as_a2a("MyAgent", my_handler, port=8100)
-    await server.run()
-
-This package (aip_sdk) provides:
-- AIPClient for connecting to AIP platform
-- Types for task results, agent config, etc.
-"""
+"""Unibase AIP SDK."""
 
 from aip_sdk.client import (
     AIPClient,

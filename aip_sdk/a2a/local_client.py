@@ -1,25 +1,18 @@
-"""Local A2A Client - In-Process Agent Communication.
-
-This client implements the A2A protocol for local (in-process) agents,
-providing the same interface as HTTP-based clients but without network overhead.
-
-The key benefit is that local agent-to-agent calls use the standard A2A
-message format while avoiding serialization and network latency.
-"""
+"""Local A2A Client - In-Process Agent Communication."""
 
 from typing import AsyncGenerator, Optional, Union
 import uuid
 import logging
 
-from unibase_agent_sdk.a2a.types import (
+from a2a.types import (
     Task,
     TaskState,
     TaskStatus,
     Message,
     AgentCard,
-    StreamResponse,
     TaskStatusUpdateEvent,
 )
+from unibase_agent_sdk.a2a import StreamResponse
 
 from aip_sdk.a2a.interface import A2AClientInterface
 from aip_sdk.a2a.envelope import AIPContext, wrap_message
@@ -37,32 +30,10 @@ class AgentNotFoundError(Exception):
 
 
 class LocalA2AClient(A2AClientInterface):
-    """A2A client for local (in-process) agents.
-
-    This client calls agents directly within the same process,
-    using the A2A protocol format but without network overhead.
-
-    Features:
-    - Direct function calls to agent TaskHandlers
-    - Same A2A message format as remote calls
-    - Support for streaming responses
-    - Zero serialization overhead for local calls
-
-    Example:
-        registry = LocalAgentRegistry()
-        client = LocalA2AClient(registry)
-
-        message = Message.user("What is 2+2?")
-        task = await client.send_task("calculator", message)
-        print(task.status.state)  # TaskState.COMPLETED
-    """
+    """A2A client for local (in-process) agents."""
 
     def __init__(self, registry: LocalAgentRegistry):
-        """Initialize local A2A client.
-
-        Args:
-            registry: LocalAgentRegistry containing agent handlers
-        """
+        """Initialize local A2A client."""
         self._registry = registry
         # Task storage for get_task support
         self._tasks: dict[str, Task] = {}
@@ -77,22 +48,7 @@ class LocalA2AClient(A2AClientInterface):
         aip_context: Optional[AIPContext] = None,
         stream: bool = False,
     ) -> Union[Task, AsyncGenerator[StreamResponse, None]]:
-        """Send a task to a local agent.
-
-        Args:
-            agent_id: Target agent identifier
-            message: A2A message to send
-            task_id: Optional task ID (auto-generated if not provided)
-            context_id: Optional context ID for grouping
-            aip_context: Optional AIP context
-            stream: Whether to return streaming response
-
-        Returns:
-            Task if stream=False, AsyncGenerator if stream=True
-
-        Raises:
-            AgentNotFoundError: If agent is not registered locally
-        """
+        """Send a task to a local agent."""
         # Look up local agent
         agent_info = self._registry.get_local_agent(agent_id)
         if not agent_info:
@@ -122,15 +78,7 @@ class LocalA2AClient(A2AClientInterface):
         handler,
         task: Task,
     ) -> Task:
-        """Execute handler and collect all responses into task.
-
-        Args:
-            handler: TaskHandler to call
-            task: Task to process
-
-        Returns:
-            Updated Task with results
-        """
+        """Execute handler and collect all responses into task."""
         task.status = TaskStatus(state=TaskState.WORKING)
         self._tasks[task.id] = task
 
@@ -158,15 +106,7 @@ class LocalA2AClient(A2AClientInterface):
         handler,
         task: Task,
     ) -> AsyncGenerator[StreamResponse, None]:
-        """Execute handler and yield streaming responses.
-
-        Args:
-            handler: TaskHandler to call
-            task: Task to process
-
-        Yields:
-            StreamResponse events from the handler
-        """
+        """Execute handler and yield streaming responses."""
         task.status = TaskStatus(state=TaskState.WORKING)
         self._tasks[task.id] = task
 
@@ -214,12 +154,7 @@ class LocalA2AClient(A2AClientInterface):
         self._tasks[task.id] = task
 
     def _apply_response(self, task: Task, response: StreamResponse) -> None:
-        """Apply a StreamResponse to update task state.
-
-        Args:
-            task: Task to update
-            response: Response to apply
-        """
+        """Apply a StreamResponse to update task state."""
         if response.task:
             # Full task replacement
             task.status = response.task.status
@@ -252,32 +187,14 @@ class LocalA2AClient(A2AClientInterface):
             task.history.append(response.message)
 
     async def get_agent_card(self, agent_id: str) -> Optional[AgentCard]:
-        """Get agent card for a local agent.
-
-        Args:
-            agent_id: Agent identifier
-
-        Returns:
-            AgentCard if agent exists, None otherwise
-        """
+        """Get agent card for a local agent."""
         agent_info = self._registry.get_local_agent(agent_id)
         if agent_info:
             return agent_info.agent_card
         return None
 
     async def cancel_task(self, agent_id: str, task_id: str) -> bool:
-        """Request task cancellation.
-
-        Note: Local tasks don't support true cancellation yet.
-        This marks the task as canceled but doesn't interrupt execution.
-
-        Args:
-            agent_id: Agent identifier
-            task_id: Task to cancel
-
-        Returns:
-            True if task was found and marked canceled
-        """
+        """Request task cancellation."""
         task = self._tasks.get(task_id)
         if task:
             task.status = TaskStatus(state=TaskState.CANCELED)
@@ -285,15 +202,7 @@ class LocalA2AClient(A2AClientInterface):
         return False
 
     async def get_task(self, agent_id: str, task_id: str) -> Optional[Task]:
-        """Get current task state.
-
-        Args:
-            agent_id: Agent identifier
-            task_id: Task identifier
-
-        Returns:
-            Task if found, None otherwise
-        """
+        """Get current task state."""
         return self._tasks.get(task_id)
 
     async def close(self) -> None:

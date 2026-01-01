@@ -1,8 +1,4 @@
-"""
-SDK Exception Classes
-
-Custom exceptions for better error handling and debugging.
-"""
+"""SDK Exception Classes."""
 
 from __future__ import annotations
 

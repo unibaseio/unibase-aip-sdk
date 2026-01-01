@@ -1,35 +1,28 @@
-"""A2A Agent Adapter - Adapts existing Agents to A2A protocol.
-
-This adapter wraps existing AIP Agent implementations to work with the
-A2A protocol, converting between the perform_task interface and A2A
-Task/Message format.
-
-The adapter handles:
-- Converting A2A Message to TaskSpec for perform_task
-- Converting TaskResult to A2A StreamResponse
-- Creating proper AgentContext for agent execution
-- Generating A2A AgentCard from AgentConfig
-"""
+"""A2A Agent Adapter - Adapts existing Agents to A2A protocol."""
 
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, Optional
 import json
 import logging
 import uuid
 
-from unibase_agent_sdk.a2a.types import (
+from a2a.types import (
     Task as A2ATask,
     TaskState,
     TaskStatus,
     Message,
-    StreamResponse,
     TaskStatusUpdateEvent,
     Artifact,
     TextPart,
     AgentCard,
-    Skill,
-    Provider,
+    AgentSkill,
+    AgentProvider,
     Role,
 )
+from unibase_agent_sdk.a2a import StreamResponse
+
+# Backwards compatibility aliases
+Skill = AgentSkill
+Provider = AgentProvider
 
 from aip_sdk.types import Task as SDKTask, TaskResult, AgentContext
 
@@ -40,14 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 def extract_text_from_message(message: Message) -> str:
-    """Extract plain text content from an A2A Message.
-
-    Args:
-        message: A2A Message with parts
-
-    Returns:
-        Concatenated text from all TextParts
-    """
+    """Extract plain text content from an A2A Message."""
     texts = []
     for part in message.parts:
         if hasattr(part, "text"):
@@ -56,17 +42,7 @@ def extract_text_from_message(message: Message) -> str:
 
 
 def extract_payload_from_message(message: Message) -> Dict[str, Any]:
-    """Extract structured payload from an A2A Message.
-
-    Tries to parse JSON from the message text, or returns
-    the text wrapped in a 'query' field.
-
-    Args:
-        message: A2A Message
-
-    Returns:
-        Dict payload suitable for perform_task
-    """
+    """Extract structured payload from an A2A Message."""
     text = extract_text_from_message(message)
 
     # Try to parse as JSON
@@ -84,14 +60,7 @@ def extract_payload_from_message(message: Message) -> Dict[str, Any]:
 
 
 def task_result_to_message(result: TaskResult) -> Message:
-    """Convert a TaskResult to an A2A Message.
-
-    Args:
-        result: TaskResult from perform_task
-
-    Returns:
-        A2A Message with result content
-    """
+    """Convert a TaskResult to an A2A Message."""
     # Build response text
     if result.success:
         if result.summary:
@@ -109,16 +78,7 @@ def agent_config_to_card(
     config: Any,
     endpoint_url: Optional[str] = None,
 ) -> AgentCard:
-    """Convert an AgentConfig to an A2A AgentCard.
-
-    Args:
-        agent_id: Agent identifier
-        config: AgentConfig object
-        endpoint_url: Optional HTTP endpoint URL
-
-    Returns:
-        A2A AgentCard
-    """
+    """Convert an AgentConfig to an A2A AgentCard."""
     # Build skills list
     skills = []
     if hasattr(config, "skills"):
@@ -190,29 +150,7 @@ def agent_config_to_card(
 
 
 class A2AAgentAdapter:
-    """Adapts an existing Agent to A2A protocol.
-
-    This adapter wraps an Agent that uses perform_task(task, context)
-    and exposes it as an A2A TaskHandler that accepts Task objects
-    and yields StreamResponse events.
-
-    Features:
-    - Converts A2A Messages to TaskSpec format
-    - Converts TaskResult to A2A StreamResponse
-    - Creates AgentContext with A2A-based inter-agent calls
-    - Generates AgentCard from AgentConfig
-
-    Example:
-        agent = MyAgent()
-        adapter = A2AAgentAdapter(agent, client_factory)
-
-        # Register with the A2A system
-        factory.register_local_agent(
-            agent_id=agent.agent_id,
-            task_handler=adapter.handle_task,
-            agent_card=adapter.agent_card,
-        )
-    """
+    """Adapts an existing Agent to A2A protocol."""
 
     def __init__(
         self,
@@ -221,13 +159,7 @@ class A2AAgentAdapter:
         *,
         endpoint_url: Optional[str] = None,
     ):
-        """Initialize the adapter.
-
-        Args:
-            agent: The Agent to adapt
-            client_factory: A2AClientFactory for inter-agent calls
-            endpoint_url: Optional HTTP endpoint URL for the agent
-        """
+        """Initialize the adapter."""
         self._agent = agent
         self._client_factory = client_factory
         self._endpoint_url = endpoint_url
@@ -263,15 +195,7 @@ class A2AAgentAdapter:
         task: A2ATask,
         run_id: str,
     ) -> AgentContext:
-        """Create an AgentContext for the task.
-
-        Args:
-            task: A2A Task being processed
-            run_id: Run identifier for event correlation
-
-        Returns:
-            AgentContext for use in perform_task
-        """
+        """Create an AgentContext for the task."""
         factory = self._client_factory
 
         async def invoke_agent(
@@ -391,16 +315,7 @@ class A2AAgentAdapter:
         self,
         task: A2ATask,
     ) -> AsyncGenerator[StreamResponse, None]:
-        """Handle an A2A Task by calling the wrapped agent.
-
-        This is the TaskHandler interface for A2A.
-
-        Args:
-            task: A2A Task to process
-
-        Yields:
-            StreamResponse events
-        """
+        """Handle an A2A Task by calling the wrapped agent."""
         run_id = task.context_id or str(uuid.uuid4())
 
         # Emit initial working status
@@ -511,16 +426,7 @@ def adapt_agent(
     *,
     endpoint_url: Optional[str] = None,
 ) -> A2AAgentAdapter:
-    """Convenience function to create an A2A adapter for an agent.
-
-    Args:
-        agent: The Agent to adapt
-        client_factory: Optional A2AClientFactory
-        endpoint_url: Optional HTTP endpoint URL
-
-    Returns:
-        A2AAgentAdapter instance
-    """
+    """Convenience function to create an A2A adapter for an agent."""
     return A2AAgentAdapter(
         agent=agent,
         client_factory=client_factory,

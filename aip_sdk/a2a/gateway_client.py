@@ -1,16 +1,4 @@
-"""Gateway A2A Client - Gateway-mediated Agent Communication.
-
-This client implements A2A protocol for agents accessed through a gateway,
-supporting both Push mode (gateway forwards requests) and Pull mode
-(agents poll for tasks).
-
-Gateway Modes:
-- Push Mode: Gateway forwards A2A requests to agent endpoint
-- Pull Mode: Tasks are queued, agents poll and respond
-
-In both modes, this client provides a unified A2A interface to callers,
-abstracting the underlying gateway mechanics.
-"""
+"""Gateway A2A Client - Gateway-mediated Agent Communication."""
 
 from typing import AsyncGenerator, Dict, Optional, Union
 import asyncio
@@ -18,16 +6,16 @@ import logging
 import uuid
 import httpx
 
-from unibase_agent_sdk.a2a.types import (
+from a2a.types import (
     Task,
     TaskState,
     TaskStatus,
     Message,
     AgentCard,
-    StreamResponse,
     TaskStatusUpdateEvent,
     JSONRPCRequest,
 )
+from unibase_agent_sdk.a2a import StreamResponse
 
 from aip_sdk.a2a.interface import A2AClientInterface
 from aip_sdk.a2a.envelope import AIPContext, wrap_message
@@ -54,29 +42,7 @@ class TaskTimeoutError(Exception):
 
 
 class GatewayA2AClient(A2AClientInterface):
-    """A2A client for gateway-mediated agent communication.
-
-    This client routes A2A requests through a gateway, which then either:
-    - Push Mode: Forwards the request to the agent's HTTP endpoint
-    - Pull Mode: Queues the task for the agent to poll
-
-    The client abstracts these modes, providing a consistent A2A interface.
-
-    Features:
-    - Transparent Push/Pull mode handling
-    - Task status polling for Pull mode
-    - AIP context propagation
-    - Streaming support (in Push mode)
-
-    Example:
-        client = GatewayA2AClient(
-            gateway_url="https://gateway.example.com",
-            mode="push"  # or "pull"
-        )
-
-        message = Message.user("Hello")
-        task = await client.send_task("remote-agent", message)
-    """
+    """A2A client for gateway-mediated agent communication."""
 
     def __init__(
         self,
@@ -88,16 +54,7 @@ class GatewayA2AClient(A2AClientInterface):
         max_poll_time: float = 300.0,
         headers: Optional[Dict[str, str]] = None,
     ):
-        """Initialize Gateway A2A client.
-
-        Args:
-            gateway_url: Gateway base URL
-            mode: Gateway mode - "push" or "pull"
-            timeout: Request timeout in seconds
-            poll_interval: Interval for polling task status (Pull mode)
-            max_poll_time: Maximum time to poll for task completion
-            headers: Additional headers for requests
-        """
+        """Initialize Gateway A2A client."""
         self._gateway_url = gateway_url.rstrip("/")
         self._mode = mode
         self._timeout = timeout
@@ -137,23 +94,7 @@ class GatewayA2AClient(A2AClientInterface):
         aip_context: Optional[AIPContext] = None,
         stream: bool = False,
     ) -> Union[Task, AsyncGenerator[StreamResponse, None]]:
-        """Send a task through the gateway.
-
-        Args:
-            agent_id: Target agent identifier
-            message: A2A message to send
-            task_id: Optional task ID (auto-generated if not provided)
-            context_id: Optional context ID for grouping
-            aip_context: Optional AIP context
-            stream: Whether to return streaming response
-
-        Returns:
-            Task if stream=False, AsyncGenerator if stream=True
-
-        Raises:
-            GatewayError: If gateway communication fails
-            TaskTimeoutError: If task times out (Pull mode)
-        """
+        """Send a task through the gateway."""
         # Wrap message with AIP context if provided
         if aip_context:
             message = wrap_message(message, aip_context)
@@ -179,17 +120,7 @@ class GatewayA2AClient(A2AClientInterface):
         task_id: str,
         context_id: Optional[str],
     ) -> Task:
-        """Send task via Push mode (gateway forwards to agent).
-
-        Args:
-            agent_id: Target agent
-            message: Message to send
-            task_id: Task ID
-            context_id: Optional context ID
-
-        Returns:
-            Completed Task from agent
-        """
+        """Send task via Push mode (gateway forwards to agent)."""
         client = await self._get_client()
 
         # Build JSON-RPC request
@@ -241,17 +172,7 @@ class GatewayA2AClient(A2AClientInterface):
         task_id: str,
         context_id: Optional[str],
     ) -> AsyncGenerator[StreamResponse, None]:
-        """Stream task via Push mode.
-
-        Args:
-            agent_id: Target agent
-            message: Message to send
-            task_id: Task ID
-            context_id: Optional context ID
-
-        Yields:
-            StreamResponse events from agent
-        """
+        """Stream task via Push mode."""
         client = await self._get_client()
 
         params = {
@@ -302,22 +223,7 @@ class GatewayA2AClient(A2AClientInterface):
         task_id: str,
         context_id: Optional[str],
     ) -> Task:
-        """Send task via Pull mode (task queued for agent to poll).
-
-        This method:
-        1. Submits the task to the gateway queue
-        2. Polls for task completion
-        3. Returns completed task
-
-        Args:
-            agent_id: Target agent
-            message: Message to send
-            task_id: Task ID
-            context_id: Optional context ID
-
-        Returns:
-            Completed Task
-        """
+        """Send task via Pull mode (task queued for agent to poll)."""
         client = await self._get_client()
 
         # Create initial task
@@ -424,13 +330,8 @@ class GatewayA2AClient(A2AClientInterface):
                 # Continue polling
 
     def _apply_result(self, task: Task, result: Dict) -> None:
-        """Apply result data to task.
-
-        Args:
-            task: Task to update
-            result: Result dictionary from gateway
-        """
-        from unibase_agent_sdk.a2a.types import TextPart, Artifact
+        """Apply result data to task."""
+        from a2a.types import TextPart, Artifact
 
         # Handle different result formats
         if "message" in result:
@@ -457,15 +358,8 @@ class GatewayA2AClient(A2AClientInterface):
                 task.artifacts.append(Artifact.from_dict(artifact_data))
 
     def _parse_stream_response(self, data: Dict) -> StreamResponse:
-        """Parse stream response data.
-
-        Args:
-            data: Response data dictionary
-
-        Returns:
-            StreamResponse object
-        """
-        from unibase_agent_sdk.a2a.types import (
+        """Parse stream response data."""
+        from a2a.types import (
             TaskStatusUpdateEvent,
             TaskArtifactUpdateEvent,
             TaskStatus,
@@ -497,14 +391,7 @@ class GatewayA2AClient(A2AClientInterface):
         return response
 
     async def get_agent_card(self, agent_id: str) -> Optional[AgentCard]:
-        """Get agent card via gateway.
-
-        Args:
-            agent_id: Agent identifier
-
-        Returns:
-            AgentCard if found, None otherwise
-        """
+        """Get agent card via gateway."""
         if agent_id in self._agent_cards:
             return self._agent_cards[agent_id]
 
@@ -528,15 +415,7 @@ class GatewayA2AClient(A2AClientInterface):
             return None
 
     async def cancel_task(self, agent_id: str, task_id: str) -> bool:
-        """Cancel a task via gateway.
-
-        Args:
-            agent_id: Agent identifier
-            task_id: Task to cancel
-
-        Returns:
-            True if cancellation was accepted
-        """
+        """Cancel a task via gateway."""
         client = await self._get_client()
 
         try:
@@ -562,15 +441,7 @@ class GatewayA2AClient(A2AClientInterface):
             return False
 
     async def get_task(self, agent_id: str, task_id: str) -> Optional[Task]:
-        """Get task status via gateway.
-
-        Args:
-            agent_id: Agent identifier
-            task_id: Task identifier
-
-        Returns:
-            Task if found, None otherwise
-        """
+        """Get task status via gateway."""
         # Check local cache first
         if task_id in self._pending_tasks:
             return self._pending_tasks[task_id]

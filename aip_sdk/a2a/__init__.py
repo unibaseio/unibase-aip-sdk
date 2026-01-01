@@ -1,48 +1,7 @@
-"""AIP SDK A2A Communication Module.
+"""AIP SDK A2A Communication Module."""
 
-This module provides unified A2A (Agent-to-Agent) communication for the AIP SDK.
-All agent communication uses A2A protocol regardless of transport:
-- LocalA2AClient: In-process calls (no network overhead)
-- HttpA2AClient: HTTP calls to remote agents
-- GatewayA2AClient: Gateway push/pull mode support
-
-Key components:
-- AIPContext: AIP system context embedded in A2A messages
-- A2AClientFactory: Unified client factory with automatic routing
-- A2AAgentAdapter: Adapts existing perform_task agents to A2A
-- LocalAgentRegistry: Manages local agent instances
-"""
-
-# Re-export A2A types from agent SDK
-from unibase_agent_sdk.a2a.types import (
-    # Core types
-    Task,
-    TaskState,
-    TaskStatus,
-    Message,
-    Role,
-    Artifact,
-    # Parts
-    Part,
-    TextPart,
-    FilePart,
-    DataPart,
-    # Streaming
-    StreamResponse,
-    TaskStatusUpdateEvent,
-    TaskArtifactUpdateEvent,
-    # Discovery
-    AgentCard,
-    Skill,
-    Capability,
-    Provider,
-    SupportedInterface,
-    # JSON-RPC
-    JSONRPCRequest,
-    JSONRPCResponse,
-    JSONRPCError,
-    A2AErrorCode,
-)
+# Import Unibase extensions from agent SDK
+from unibase_agent_sdk.a2a import StreamResponse, A2AErrorCode
 
 # AIP-specific components
 from aip_sdk.a2a.envelope import (
@@ -65,32 +24,11 @@ from aip_sdk.a2a.agent_adapter import (
     extract_text_from_message,
     extract_payload_from_message,
     task_result_to_message,
-    agent_config_to_card,
 )
 
 __all__ = [
-    # A2A Protocol types
-    "Task",
-    "TaskState",
-    "TaskStatus",
-    "Message",
-    "Role",
-    "Artifact",
-    "Part",
-    "TextPart",
-    "FilePart",
-    "DataPart",
+    # Unibase extensions (re-exported for convenience)
     "StreamResponse",
-    "TaskStatusUpdateEvent",
-    "TaskArtifactUpdateEvent",
-    "AgentCard",
-    "Skill",
-    "Capability",
-    "Provider",
-    "SupportedInterface",
-    "JSONRPCRequest",
-    "JSONRPCResponse",
-    "JSONRPCError",
     "A2AErrorCode",
     # AIP Context
     "AIPContext",
@@ -119,5 +57,4 @@ __all__ = [
     "extract_text_from_message",
     "extract_payload_from_message",
     "task_result_to_message",
-    "agent_config_to_card",
 ]
