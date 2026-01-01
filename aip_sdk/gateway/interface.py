@@ -13,17 +13,10 @@ from typing import (
 from a2a.types import Task, Message, AgentCard
 
 from aip_sdk.agent.context import AIPContext
+from aip_sdk.exceptions import AgentNotFoundError
 
 if TYPE_CHECKING:
     from unibase_agent_sdk.a2a import StreamResponse
-
-
-class AgentNotFoundError(Exception):
-    """Raised when an agent cannot be found."""
-
-    def __init__(self, agent_id: str):
-        self.agent_id = agent_id
-        super().__init__(f"Agent not found: {agent_id}")
 
 
 # Type alias for task handlers

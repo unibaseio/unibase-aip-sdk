@@ -18,8 +18,8 @@ from aip_sdk.gateway.a2a_client import (
 from aip_sdk.gateway.interface import (
     A2AClientInterface,
     TaskHandler,
-    AgentNotFoundError,
 )
+from aip_sdk.exceptions import AgentNotFoundError
 
 __all__ = [
     # Gateway management
@@ -32,5 +32,6 @@ __all__ = [
     # Interface
     "A2AClientInterface",
     "TaskHandler",
+    # Exceptions (re-exported from aip_sdk.exceptions)
     "AgentNotFoundError",
 ]

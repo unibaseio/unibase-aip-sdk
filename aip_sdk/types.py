@@ -107,35 +107,79 @@ class SkillConfig:
 
 @dataclass
 class CostModel:
-    """Agent cost model configuration for SDK use."""
-    base_call_fee: float = 0.0
-    per_agent_call_fee: float = 0.0
+    """Agent cost model configuration.
 
-    def to_dict(self) -> Dict[str, float]:
-        return {
-            "base_call_fee": self.base_call_fee,
-            "per_agent_call_fee": self.per_agent_call_fee,
-        }
+    Unified cost model supporting various fee structures:
+    - base_call_fee: Fixed fee per call
+    - per_agent_call_fee: Fee for agent-to-agent calls (legacy, prefer base_call_fee)
+    - per_use_fee: Fee per usage/invocation
+    - per_write_fee: Fee for write operations
+    - per_token_fee: Fee per token processed
+    - custom_fees: Additional custom fee structures
+    """
+    base_call_fee: Optional[float] = None
+    per_agent_call_fee: Optional[float] = None  # Legacy field
+    per_use_fee: Optional[float] = None
+    per_write_fee: Optional[float] = None
+    per_token_fee: Optional[float] = None
+    custom_fees: Dict[str, float] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        result: Dict[str, Any] = {"custom_fees": self.custom_fees}
+        if self.base_call_fee is not None:
+            result["base_call_fee"] = self.base_call_fee
+        if self.per_agent_call_fee is not None:
+            result["per_agent_call_fee"] = self.per_agent_call_fee
+        if self.per_use_fee is not None:
+            result["per_use_fee"] = self.per_use_fee
+        if self.per_write_fee is not None:
+            result["per_write_fee"] = self.per_write_fee
+        if self.per_token_fee is not None:
+            result["per_token_fee"] = self.per_token_fee
+        return result
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CostModel":
+        """Create from dictionary."""
+        return cls(
+            base_call_fee=data.get("base_call_fee"),
+            per_agent_call_fee=data.get("per_agent_call_fee"),
+            per_use_fee=data.get("per_use_fee"),
+            per_write_fee=data.get("per_write_fee"),
+            per_token_fee=data.get("per_token_fee"),
+            custom_fees=data.get("custom_fees", {}),
+        )
 
 
 @dataclass
 class AgentConfig:
-    """Configuration for an agent."""
+    """Configuration for an agent.
+
+    Pricing is controlled via `cost_model`. The simplest usage is:
+        AgentConfig(name="MyAgent", cost_model=CostModel(base_call_fee=0.05))
+
+    This sets the price per call to $0.05. For more complex pricing, use
+    additional CostModel fields like per_use_fee, per_token_fee, etc.
+    """
     name: str
     description: str = ""
     handle: Optional[str] = None
     skills: List[SkillConfig] = field(default_factory=list)
     capabilities: List[str] = field(default_factory=list)
     cost_model: CostModel = field(default_factory=CostModel)
-    price: float = 0.001
-    price_currency: str = "USD"
+    currency: str = "USD"
     metadata: Dict[str, Any] = field(default_factory=dict)
     endpoint_url: Optional[str] = None
+
+    @property
+    def price(self) -> float:
+        """Get the primary price (base_call_fee from cost_model)."""
+        return self.cost_model.base_call_fee or 0.001
 
     def to_registration_dict(self) -> Dict[str, Any]:
         """Convert to registration API format."""
         handle = self.handle or self.name.lower().replace(" ", "_")
-        
+
         return {
             "handle": handle,
             "card": {
@@ -151,7 +195,7 @@ class AgentConfig:
             "cost_model": self.cost_model.to_dict(),
             "price": {
                 "amount": self.price,
-                "currency": self.price_currency,
+                "currency": self.currency,
             },
             "metadata": self.metadata,
             "endpoint_url": self.endpoint_url,

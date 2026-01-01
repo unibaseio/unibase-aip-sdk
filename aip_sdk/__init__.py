@@ -19,7 +19,6 @@ from aip_sdk.gateway import (
     GatewayA2AClient,
     GatewayError,
     A2AClientInterface,
-    AgentNotFoundError as GatewayAgentNotFoundError,
 )
 
 # Agent development
