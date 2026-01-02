@@ -107,16 +107,7 @@ class SkillConfig:
 
 @dataclass
 class CostModel:
-    """Agent cost model configuration.
-
-    Unified cost model supporting various fee structures:
-    - base_call_fee: Fixed fee per call
-    - per_agent_call_fee: Fee for agent-to-agent calls (legacy, prefer base_call_fee)
-    - per_use_fee: Fee per usage/invocation
-    - per_write_fee: Fee for write operations
-    - per_token_fee: Fee per token processed
-    - custom_fees: Additional custom fee structures
-    """
+    """Agent cost model configuration."""
     base_call_fee: Optional[float] = None
     per_agent_call_fee: Optional[float] = None  # Legacy field
     per_use_fee: Optional[float] = None
@@ -153,14 +144,7 @@ class CostModel:
 
 @dataclass
 class AgentConfig:
-    """Configuration for an agent.
-
-    Pricing is controlled via `cost_model`. The simplest usage is:
-        AgentConfig(name="MyAgent", cost_model=CostModel(base_call_fee=0.05))
-
-    This sets the price per call to $0.05. For more complex pricing, use
-    additional CostModel fields like per_use_fee, per_token_fee, etc.
-    """
+    """Configuration for an agent."""
     name: str
     description: str = ""
     handle: Optional[str] = None

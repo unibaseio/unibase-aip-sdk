@@ -27,16 +27,16 @@ class GatewayClient:
 
     async def register_agent(
         self,
-        agent_name: str,
-        backend_url: str,
+        handle: str,
+        endpoint_url: str,
         metadata: Optional[Dict[str, Any]] = None,
         force: bool = False
     ) -> Dict[str, Any]:
         """Register an agent with the gateway."""
         url = f"{self.gateway_url}/gateway/register"
         payload = {
-            "agent_name": agent_name,
-            "backend_url": backend_url,
+            "handle": handle,
+            "endpoint_url": endpoint_url,
             "metadata": metadata or {},
             "force": force
         }
@@ -51,20 +51,20 @@ class GatewayClient:
             result = response.json()
 
             logger.info(
-                f"Registered agent '{agent_name}' with gateway: {result['gateway_url']}"
+                f"Registered agent '{handle}' with gateway: {result['gateway_url']}"
             )
             return result
 
-    async def unregister_agent(self, agent_name: str) -> Dict[str, Any]:
+    async def unregister_agent(self, handle: str) -> Dict[str, Any]:
         """Unregister an agent from the gateway."""
-        url = f"{self.gateway_url}/gateway/unregister/{agent_name}"
+        url = f"{self.gateway_url}/gateway/unregister/{handle}"
 
         async with httpx.AsyncClient() as client:
             response = await client.delete(url, timeout=self.timeout)
             response.raise_for_status()
             result = response.json()
 
-            logger.info(f"Unregistered agent '{agent_name}' from gateway")
+            logger.info(f"Unregistered agent '{handle}' from gateway")
             return result
 
     async def list_agents(self) -> List[Dict[str, Any]]:
@@ -78,9 +78,9 @@ class GatewayClient:
 
             return result.get("agents", [])
 
-    async def get_agent_info(self, agent_name: str) -> Dict[str, Any]:
+    async def get_agent_info(self, handle: str) -> Dict[str, Any]:
         """Get information about a specific agent."""
-        url = f"{self.gateway_url}/gateway/agents/{agent_name}"
+        url = f"{self.gateway_url}/gateway/agents/{handle}"
 
         async with httpx.AsyncClient() as client:
             response = await client.get(url, timeout=self.timeout)
@@ -127,31 +127,31 @@ class SyncGatewayClient:
 
     def register_agent(
         self,
-        agent_name: str,
-        backend_url: str,
+        handle: str,
+        endpoint_url: str,
         metadata: Optional[Dict[str, Any]] = None,
         force: bool = False
     ) -> Dict[str, Any]:
         """Register an agent (sync version)."""
         import asyncio
         return asyncio.run(
-            self.client.register_agent(agent_name, backend_url, metadata, force)
+            self.client.register_agent(handle, endpoint_url, metadata, force)
         )
 
-    def unregister_agent(self, agent_name: str) -> Dict[str, Any]:
+    def unregister_agent(self, handle: str) -> Dict[str, Any]:
         """Unregister an agent (sync version)."""
         import asyncio
-        return asyncio.run(self.client.unregister_agent(agent_name))
+        return asyncio.run(self.client.unregister_agent(handle))
 
     def list_agents(self) -> List[Dict[str, Any]]:
         """List all agents (sync version)."""
         import asyncio
         return asyncio.run(self.client.list_agents())
 
-    def get_agent_info(self, agent_name: str) -> Dict[str, Any]:
+    def get_agent_info(self, handle: str) -> Dict[str, Any]:
         """Get agent info (sync version)."""
         import asyncio
-        return asyncio.run(self.client.get_agent_info(agent_name))
+        return asyncio.run(self.client.get_agent_info(handle))
 
     def health_check(self) -> bool:
         """Health check (sync version)."""
