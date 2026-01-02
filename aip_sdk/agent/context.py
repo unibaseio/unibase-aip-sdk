@@ -1,41 +1,43 @@
 """AIP Context Envelope for A2A Messages."""
 
-from dataclasses import dataclass, field, asdict
+from __future__ import annotations
+
 from typing import Any, Dict, List, Optional, Tuple
 
 from a2a.types import Message
+from pydantic import BaseModel, Field
 
 
-@dataclass
-class PaymentContextData:
+class PaymentContextData(BaseModel):
     """Serializable payment context data for embedding in A2A messages."""
+
     run_id: str
     caller: str
     actor: str
-    chain: List[str] = field(default_factory=list)
+    chain: List[str] = Field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        return self.model_dump()
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "PaymentContextData":
-        return cls(**data)
+    def from_dict(cls, data: Dict[str, Any]) -> PaymentContextData:
+        return cls.model_validate(data)
 
 
-@dataclass
-class AIPContext:
+class AIPContext(BaseModel):
     """AIP system context embedded in A2A message metadata."""
+
     run_id: str
     caller_agent: str
-    caller_chain: List[str] = field(default_factory=list)
+    caller_chain: List[str] = Field(default_factory=list)
     payment_context: Optional[PaymentContextData] = None
     memory_scope: Optional[str] = None
     event_bus_id: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary for embedding in A2A metadata."""
-        result = {
+        result: Dict[str, Any] = {
             "run_id": self.run_id,
             "caller_agent": self.caller_agent,
             "caller_chain": self.caller_chain,
@@ -51,20 +53,22 @@ class AIPContext:
         return result
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "AIPContext":
+    def from_dict(cls, data: Dict[str, Any]) -> AIPContext:
         """Deserialize from dictionary."""
         payment_data = data.get("payment_context")
         return cls(
             run_id=data["run_id"],
             caller_agent=data["caller_agent"],
             caller_chain=data.get("caller_chain", []),
-            payment_context=PaymentContextData.from_dict(payment_data) if payment_data else None,
+            payment_context=PaymentContextData.from_dict(payment_data)
+            if payment_data
+            else None,
             memory_scope=data.get("memory_scope"),
             event_bus_id=data.get("event_bus_id"),
             metadata=data.get("metadata", {}),
         )
 
-    def spawn_child(self, target_agent: str) -> "AIPContext":
+    def spawn_child(self, target_agent: str) -> AIPContext:
         """Create a child context for delegating to another agent."""
         new_chain = self.caller_chain + [self.caller_agent]
 

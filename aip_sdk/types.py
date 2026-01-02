@@ -2,21 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import (
-    Any,
-    Awaitable,
-    Callable,
-    Dict,
-    List,
-    Optional,
-)
 from enum import Enum
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RunStatus(Enum):
     """Status of a run execution in the AIP platform."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -24,19 +18,17 @@ class RunStatus(Enum):
     CANCELLED = "cancelled"
 
 
-
-
-@dataclass
-class Task:
+class Task(BaseModel):
     """Task specification for SDK use."""
+
     task_id: str
     name: str
     description: str = ""
-    payload: Dict[str, Any] = field(default_factory=dict)
+    payload: Dict[str, Any] = Field(default_factory=dict)
     assigned_agent: Optional[str] = None
 
     @classmethod
-    def from_domain(cls, task: Any) -> "Task":
+    def from_domain(cls, task: Any) -> Task:
         """Create Task from domain task object."""
         if isinstance(task, dict):
             return cls(
@@ -55,9 +47,9 @@ class Task:
         )
 
 
-@dataclass
-class SkillInput:
+class SkillInput(BaseModel):
     """Definition of a skill input parameter."""
+
     name: str
     field_type: str = "string"
     description: str = ""
@@ -65,21 +57,21 @@ class SkillInput:
     default: Any = None
 
 
-@dataclass
-class SkillOutput:
+class SkillOutput(BaseModel):
     """Definition of a skill output parameter."""
+
     name: str
     field_type: str = "string"
     description: str = ""
 
 
-@dataclass
-class SkillConfig:
+class SkillConfig(BaseModel):
     """Configuration for an agent skill."""
+
     name: str
     description: str
-    inputs: List[SkillInput] = field(default_factory=list)
-    outputs: List[SkillOutput] = field(default_factory=list)
+    inputs: List[SkillInput] = Field(default_factory=list)
+    outputs: List[SkillOutput] = Field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API calls."""
@@ -105,54 +97,38 @@ class SkillConfig:
         }
 
 
-@dataclass
-class CostModel:
+class CostModel(BaseModel):
     """Agent cost model configuration."""
+
     base_call_fee: Optional[float] = None
-    per_agent_call_fee: Optional[float] = None  # Legacy field
+    per_agent_call_fee: Optional[float] = None
     per_use_fee: Optional[float] = None
     per_write_fee: Optional[float] = None
     per_token_fee: Optional[float] = None
-    custom_fees: Dict[str, float] = field(default_factory=dict)
+    custom_fees: Dict[str, float] = Field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        result: Dict[str, Any] = {"custom_fees": self.custom_fees}
-        if self.base_call_fee is not None:
-            result["base_call_fee"] = self.base_call_fee
-        if self.per_agent_call_fee is not None:
-            result["per_agent_call_fee"] = self.per_agent_call_fee
-        if self.per_use_fee is not None:
-            result["per_use_fee"] = self.per_use_fee
-        if self.per_write_fee is not None:
-            result["per_write_fee"] = self.per_write_fee
-        if self.per_token_fee is not None:
-            result["per_token_fee"] = self.per_token_fee
+        result = self.model_dump(exclude_none=True)
+        result["custom_fees"] = self.custom_fees
         return result
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "CostModel":
+    def from_dict(cls, data: Dict[str, Any]) -> CostModel:
         """Create from dictionary."""
-        return cls(
-            base_call_fee=data.get("base_call_fee"),
-            per_agent_call_fee=data.get("per_agent_call_fee"),
-            per_use_fee=data.get("per_use_fee"),
-            per_write_fee=data.get("per_write_fee"),
-            per_token_fee=data.get("per_token_fee"),
-            custom_fees=data.get("custom_fees", {}),
-        )
+        return cls.model_validate(data)
 
 
-@dataclass
-class AgentConfig:
+class AgentConfig(BaseModel):
     """Configuration for an agent."""
+
     name: str
     description: str = ""
     handle: Optional[str] = None
-    skills: List[SkillConfig] = field(default_factory=list)
-    capabilities: List[str] = field(default_factory=list)
-    cost_model: CostModel = field(default_factory=CostModel)
+    skills: List[SkillConfig] = Field(default_factory=list)
+    capabilities: List[str] = Field(default_factory=list)
+    cost_model: CostModel = Field(default_factory=CostModel)
     currency: str = "USD"
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
     endpoint_url: Optional[str] = None
 
     @property
@@ -173,8 +149,7 @@ class AgentConfig:
             },
             "skills": [s.to_dict() for s in self.skills],
             "tasks": [
-                {"name": s.name, "description": s.description}
-                for s in self.skills
+                {"name": s.name, "description": s.description} for s in self.skills
             ],
             "cost_model": self.cost_model.to_dict(),
             "price": {
@@ -186,13 +161,13 @@ class AgentConfig:
         }
 
 
-@dataclass
-class TaskResult:
+class TaskResult(BaseModel):
     """Result of a task execution."""
+
     output: Dict[str, Any]
     summary: str
-    used_tools: List[str] = field(default_factory=list)
-    downstream_calls: List[str] = field(default_factory=list)
+    used_tools: List[str] = Field(default_factory=list)
+    downstream_calls: List[str] = Field(default_factory=list)
     success: bool = True
     error: Optional[str] = None
 
@@ -202,7 +177,7 @@ class TaskResult:
         output: Dict[str, Any],
         summary: str = "",
         used_tools: Optional[List[str]] = None,
-    ) -> "TaskResult":
+    ) -> TaskResult:
         """Create a successful result."""
         return cls(
             output=output,
@@ -212,7 +187,7 @@ class TaskResult:
         )
 
     @classmethod
-    def error_result(cls, error: str) -> "TaskResult":
+    def error_result(cls, error: str) -> TaskResult:
         """Create an error result."""
         return cls(
             output={"error": error},
@@ -222,15 +197,28 @@ class TaskResult:
         )
 
 
-@dataclass
 class AgentContext:
-    """Context provided to agent handlers during task execution."""
-    invoke_agent: Callable[[str, Any, str], Awaitable[TaskResult]]
-    emit_event: Callable[[Dict[str, Any]], None]
-    send_message: Callable[[Any], Awaitable[None]]
-    receive_message: Callable[[Optional[str], Optional[float]], Awaitable[Any]]
-    memory_read: Callable[[str], Dict[str, Any]]
-    memory_write: Callable[[str, Dict[str, Any], str], None]
+    """Context provided to agent handlers during task execution.
+
+    Note: This remains a regular class (not Pydantic) because it contains
+    callable fields that are not serializable.
+    """
+
+    def __init__(
+        self,
+        invoke_agent: Callable[[str, Any, str], Awaitable[TaskResult]],
+        emit_event: Callable[[Dict[str, Any]], None],
+        send_message: Callable[[Any], Awaitable[None]],
+        receive_message: Callable[[Optional[str], Optional[float]], Awaitable[Any]],
+        memory_read: Callable[[str], Dict[str, Any]],
+        memory_write: Callable[[str, Dict[str, Any], str], None],
+    ):
+        self.invoke_agent = invoke_agent
+        self.emit_event = emit_event
+        self.send_message = send_message
+        self.receive_message = receive_message
+        self.memory_read = memory_read
+        self.memory_write = memory_write
 
     async def call_agent(
         self,
@@ -239,24 +227,9 @@ class AgentContext:
         payload: Dict[str, Any],
         reason: str = "",
     ) -> TaskResult:
-        """Call another agent with a task.
-
-        This method routes through the AIP orchestrator which handles:
-        - Payment charging
-        - Logging to Membase
-        - Caller chain tracking
-        - Gateway routing (for remote agents)
-
-        Args:
-            agent_id: The target agent's ID (e.g., "calculator.compute")
-            task_name: Name of the task to execute
-            payload: Task payload (will be wrapped in AgentMessage format)
-            reason: Optional reason for the call (for logging)
-
-        Returns:
-            TaskResult from the target agent
-        """
+        """Call another agent with a task."""
         from uuid import uuid4
+
         task = Task(
             task_id=str(uuid4()),
             name=task_name,
@@ -264,12 +237,12 @@ class AgentContext:
             payload=payload,
         )
         result = await self.invoke_agent(agent_id, task, reason)
-        if hasattr(result, 'output'):
+        if hasattr(result, "output"):
             return TaskResult(
                 output=result.output,
-                summary=getattr(result, 'summary', ''),
-                used_tools=getattr(result, 'used_tools', []),
-                downstream_calls=getattr(result, 'downstream_calls', []),
+                summary=getattr(result, "summary", ""),
+                used_tools=getattr(result, "used_tools", []),
+                downstream_calls=getattr(result, "downstream_calls", []),
             )
         return result
 
@@ -281,21 +254,7 @@ class AgentContext:
         structured_data: Optional[Dict[str, Any]] = None,
         reason: str = "",
     ) -> TaskResult:
-        """Call another agent with an AgentMessage-style intent.
-
-        This is a convenience method for inter-agent communication that
-        uses the standard AgentMessage format. The platform will wrap
-        the intent in proper context (run_id, caller_chain, etc.).
-
-        Args:
-            agent_id: The target agent's ID
-            intent: The raw intent/request for the target agent
-            structured_data: Optional structured parameters
-            reason: Optional reason for the call
-
-        Returns:
-            TaskResult from the target agent
-        """
+        """Call another agent with an AgentMessage-style intent."""
         payload: Dict[str, Any] = {"user_request": intent}
         if structured_data:
             payload["structured_data"] = structured_data
@@ -325,7 +284,7 @@ class AgentContext:
         self.memory_write(scope, data, description)
 
     @classmethod
-    def from_execution_context(cls, ctx: Any) -> "AgentContext":
+    def from_execution_context(cls, ctx: Any) -> AgentContext:
         """Create from domain AgentExecutionContext."""
         return cls(
             invoke_agent=ctx.invoke_agent,
@@ -345,17 +304,20 @@ class AgentContext:
         *,
         emit_event: Optional[Callable[[Dict[str, Any]], None]] = None,
         send_message: Optional[Callable[[Any], Awaitable[None]]] = None,
-        receive_message: Optional[Callable[[Optional[str], Optional[float]], Awaitable[Any]]] = None,
+        receive_message: Optional[
+            Callable[[Optional[str], Optional[float]], Awaitable[Any]]
+        ] = None,
         memory_read: Optional[Callable[[str], Dict[str, Any]]] = None,
         memory_write: Optional[Callable[[str, Dict[str, Any], str], None]] = None,
-    ) -> "AgentContext":
+    ) -> AgentContext:
         """Create AgentContext with A2A-based invoke_agent."""
         import json
-        from a2a.types import Message, TaskState, Role
+
+        from a2a.types import Message, Role, TaskState
 
         try:
-            from aip_sdk.agent.context import AIPContext, PaymentContextData
             from aip_sdk.agent.adapter import extract_text_from_message
+            from aip_sdk.agent.context import AIPContext, PaymentContextData
         except ImportError:
             raise ImportError(
                 "A2A module not available. Ensure aip_sdk.a2a is properly installed."
@@ -365,9 +327,8 @@ class AgentContext:
             target_agent: str,
             subtask: Any,
             reason: str = "",
-        ) -> "TaskResult":
+        ) -> TaskResult:
             """Invoke another agent via A2A."""
-            # Convert subtask to A2A message
             if isinstance(subtask, dict):
                 payload = subtask
             elif hasattr(subtask, "payload"):
@@ -375,10 +336,8 @@ class AgentContext:
             else:
                 payload = {"task": str(subtask)}
 
-            # Create A2A message
             message = Message.user(json.dumps(payload))
 
-            # Create AIP context
             aip_context = AIPContext(
                 run_id=run_id,
                 caller_agent=caller_agent,
@@ -392,18 +351,15 @@ class AgentContext:
             )
 
             try:
-                # Send via A2A
                 result_task = await factory.send_task(
                     agent_id=target_agent,
                     message=message,
                     aip_context=aip_context,
                 )
 
-                # Convert to TaskResult
                 output = {}
                 summary = ""
 
-                # Get response from history (last agent message)
                 for msg in reversed(result_task.history):
                     if msg.role == Role.AGENT:
                         text = extract_text_from_message(msg)
@@ -414,7 +370,6 @@ class AgentContext:
                             output = {"response": text}
                         break
 
-                # Check artifacts
                 for artifact in result_task.artifacts:
                     for part in artifact.parts:
                         if hasattr(part, "text"):
@@ -424,7 +379,6 @@ class AgentContext:
                             if "data" not in output:
                                 output["data"] = part.data
 
-                # Determine success based on state
                 success = result_task.status.state == TaskState.COMPLETED
                 error = None
                 if not success and result_task.status.message:
@@ -452,39 +406,41 @@ class AgentContext:
         )
 
 
-@dataclass
-class EventData:
+class EventData(BaseModel):
     """Data from a streaming event."""
+
     event_type: str
     payload: Dict[str, Any]
     timestamp: Optional[str] = None
     run_id: Optional[str] = None
-    
+
     @property
     def is_completed(self) -> bool:
         """Check if this event indicates completion."""
         return self.event_type in ("run.completed", "orchestrator.completed")
-    
+
     @property
     def is_error(self) -> bool:
         """Check if this event indicates an error."""
         return self.event_type in ("run.failed", "orchestrator.error", "error")
-    
+
     @property
     def message(self) -> Optional[str]:
         """Get event message if available."""
         return self.payload.get("message") or self.payload.get("summary")
 
 
-@dataclass
-class RunResult:
+class RunResult(BaseModel):
     """Result of running a task through the orchestrator."""
+
     run_id: str
     status: RunStatus
     result: Optional[Dict[str, Any]] = None
-    events: List[EventData] = field(default_factory=list)
+    events: List[EventData] = Field(default_factory=list)
     error: Optional[str] = None
-    payments: List[Dict[str, Any]] = field(default_factory=list)
+    payments: List[Dict[str, Any]] = Field(default_factory=list)
+
+    model_config = ConfigDict(use_enum_values=True)
 
     @property
     def success(self) -> bool:
@@ -498,24 +454,29 @@ class RunResult:
         return None
 
 
-@dataclass
-class AgentInfo:
+class AgentInfo(BaseModel):
     """Information about a registered agent."""
+
     agent_id: str
     handle: str
     name: str
     description: str
-    capabilities: List[str] = field(default_factory=list)
-    skills: List[Dict[str, Any]] = field(default_factory=list)
+    capabilities: List[str] = Field(default_factory=list)
+    skills: List[Dict[str, Any]] = Field(default_factory=list)
     price: float = 0.0
     endpoint_url: Optional[str] = None
     on_chain: bool = False
     identity_address: Optional[str] = None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "AgentInfo":
+    def from_dict(cls, data: Dict[str, Any]) -> AgentInfo:
         """Create from API response."""
         card = data.get("card", {})
+        price_data = data.get("price")
+        price_amount = 0.0
+        if isinstance(price_data, dict):
+            price_amount = price_data.get("amount", 0.0)
+
         return cls(
             agent_id=data.get("agent_id", ""),
             handle=data.get("handle", ""),
@@ -523,16 +484,16 @@ class AgentInfo:
             description=card.get("description", data.get("description", "")),
             capabilities=card.get("capabilities", []),
             skills=data.get("skills", []),
-            price=data.get("price", {}).get("amount", 0.0) if isinstance(data.get("price"), dict) else 0.0,
+            price=price_amount,
             endpoint_url=data.get("endpoint_url"),
             on_chain=data.get("metadata", {}).get("onchain", False),
             identity_address=data.get("identity_address"),
         )
 
 
-@dataclass
-class PaginatedResponse:
+class PaginatedResponse(BaseModel):
     """Generic paginated response from the API."""
+
     items: List[Any]
     total: int
     limit: int
@@ -551,161 +512,83 @@ class PaginatedResponse:
         return None
 
 
-@dataclass
-class UserInfo:
+class UserInfo(BaseModel):
     """Information about a registered user."""
+
     user_id: str
     wallet_address: str
     email: Optional[str] = None
     created_at: Optional[str] = None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "UserInfo":
+    def from_dict(cls, data: Dict[str, Any]) -> UserInfo:
         """Create from API response."""
-        return cls(
-            user_id=data["user_id"],
-            wallet_address=data["wallet_address"],
-            email=data.get("email"),
-            created_at=data.get("created_at"),
-        )
+        return cls.model_validate(data)
 
 
-@dataclass
-class PriceInfo:
+class PriceInfo(BaseModel):
     """Price information for an agent or resource."""
+
     identifier: str
     amount: float
     currency: str = "USD"
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "PriceInfo":
+    def from_dict(cls, data: Dict[str, Any]) -> PriceInfo:
         """Create from API response."""
-        return cls(
-            identifier=data["identifier"],
-            amount=data["amount"],
-            currency=data.get("currency", "USD"),
-            metadata=data.get("metadata", {}),
-        )
+        return cls.model_validate(data)
 
 
 # =============================================================================
 # Agent Communication Types
 # =============================================================================
-# These types define the standard message format for inter-agent communication.
-# The key principle: AIP handles routing/payment/logging, agents handle understanding.
 
 
-@dataclass
-class MessageContext:
-    """Context provided by AIP platform for agent communication.
+class MessageContext(BaseModel):
+    """Context provided by AIP platform for agent communication."""
 
-    This contains metadata about the request that the agent may use
-    for logging, tracing, or context-aware responses.
-    """
     run_id: str = ""
     caller_id: str = ""
     conversation_id: Optional[str] = None
     payment_authorized: bool = True
-    caller_chain: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    caller_chain: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
-        return {
-            "run_id": self.run_id,
-            "caller_id": self.caller_id,
-            "conversation_id": self.conversation_id,
-            "payment_authorized": self.payment_authorized,
-            "caller_chain": self.caller_chain,
-            "metadata": self.metadata,
-        }
+        return self.model_dump()
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MessageContext":
+    def from_dict(cls, data: Dict[str, Any]) -> MessageContext:
         """Create from dictionary."""
-        return cls(
-            run_id=data.get("run_id", ""),
-            caller_id=data.get("caller_id", ""),
-            conversation_id=data.get("conversation_id"),
-            payment_authorized=data.get("payment_authorized", True),
-            caller_chain=data.get("caller_chain", []),
-            metadata=data.get("metadata", {}),
-        )
+        return cls.model_validate(data)
 
 
-@dataclass
-class RoutingHints:
-    """Optional hints from the routing layer.
+class RoutingHints(BaseModel):
+    """Optional hints from the routing layer."""
 
-    These are suggestions from AIP's routing system that agents may use
-    to assist with understanding, but agents are free to ignore them.
-    """
     detected_category: Optional[str] = None
-    extracted_entities: Dict[str, Any] = field(default_factory=dict)
+    extracted_entities: Dict[str, Any] = Field(default_factory=dict)
     confidence: Optional[float] = None
     suggested_task: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
-        result: Dict[str, Any] = {}
-        if self.detected_category:
-            result["detected_category"] = self.detected_category
-        if self.extracted_entities:
-            result["extracted_entities"] = self.extracted_entities
-        if self.confidence is not None:
-            result["confidence"] = self.confidence
-        if self.suggested_task:
-            result["suggested_task"] = self.suggested_task
-        return result
+        return self.model_dump(exclude_none=True)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "RoutingHints":
+    def from_dict(cls, data: Dict[str, Any]) -> RoutingHints:
         """Create from dictionary."""
-        return cls(
-            detected_category=data.get("detected_category"),
-            extracted_entities=data.get("extracted_entities", {}),
-            confidence=data.get("confidence"),
-            suggested_task=data.get("suggested_task"),
-        )
+        return cls.model_validate(data)
 
 
-@dataclass
-class AgentMessage:
-    """Universal message format for agent communication.
+class AgentMessage(BaseModel):
+    """Universal message format for agent communication."""
 
-    This is the standard envelope for all requests to agents through AIP.
-    The key principle: the `intent` field contains the raw user request,
-    and it's the agent's responsibility to interpret it.
-
-    The platform provides:
-    - Routing (which agent handles this)
-    - Payment (charging caller, paying agent)
-    - Logging (recording to Membase)
-    - Context (caller info, run_id, etc.)
-
-    The agent handles:
-    - Understanding the intent
-    - Extracting parameters
-    - Executing the task
-    - Formatting the response
-
-    Example:
-        message = AgentMessage(
-            intent="What's the weather in Tokyo?",
-            context=MessageContext(run_id="abc", caller_id="user:alice"),
-        )
-    """
-    # The raw user intent - can be natural language or structured JSON
     intent: str
-
-    # Platform-provided context (run_id, caller, etc.)
     context: MessageContext
-
-    # Optional routing hints from the platform (agent can ignore)
     hints: Optional[RoutingHints] = None
-
-    # Optional structured data if intent is JSON
     structured_data: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -721,7 +604,7 @@ class AgentMessage:
         return result
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "AgentMessage":
+    def from_dict(cls, data: Dict[str, Any]) -> AgentMessage:
         """Create from dictionary."""
         context_data = data.get("context", {})
         hints_data = data.get("hints")
@@ -736,6 +619,7 @@ class AgentMessage:
     def get_intent_as_json(self) -> Optional[Dict[str, Any]]:
         """Try to parse intent as JSON, return None if not valid JSON."""
         import json
+
         try:
             return json.loads(self.intent)
         except (json.JSONDecodeError, TypeError):
@@ -751,7 +635,7 @@ class AgentMessage:
         conversation_id: Optional[str] = None,
         hints: Optional[RoutingHints] = None,
         metadata: Optional[Dict[str, Any]] = None,
-    ) -> "AgentMessage":
+    ) -> AgentMessage:
         """Convenience factory to create an AgentMessage."""
         return cls(
             intent=intent,
@@ -765,46 +649,27 @@ class AgentMessage:
         )
 
     @classmethod
-    def from_a2a_message(cls, message: Any) -> "AgentMessage":
-        """Parse an A2A Message into AgentMessage format.
-
-        This handles both:
-        1. New format: JSON with intent, context, hints
-        2. Legacy format: Plain text or old task format
-
-        Args:
-            message: An A2A Message object (from a2a.types.Message)
-
-        Returns:
-            AgentMessage with parsed intent and context
-        """
+    def from_a2a_message(cls, message: Any) -> AgentMessage:
+        """Parse an A2A Message into AgentMessage format."""
         import json
 
-        # Extract text from message parts
         text_parts = []
-        if hasattr(message, 'parts'):
+        if hasattr(message, "parts"):
             for part in message.parts:
-                if hasattr(part, 'text'):
+                if hasattr(part, "text"):
                     text_parts.append(part.text)
         text = " ".join(text_parts)
 
-        # Try to parse as JSON
         try:
             data = json.loads(text)
 
-            # Check if it's the new AgentMessage format
             if "intent" in data and "context" in data:
                 return cls.from_dict(data)
 
-            # Check if it's the old task format
             if "task" in data:
                 task_data = data["task"]
                 payload = task_data.get("payload", {})
-
-                # Extract intent from payload or description
-                intent = payload.get("intent") or payload.get("user_request") or task_data.get("description", "")
-
-                # Build context from available data
+                intent = payload.get("intent") or task_data.get("description", "")
                 context_data = payload.get("context", {})
                 if not context_data:
                     context_data = {
@@ -815,11 +680,12 @@ class AgentMessage:
                 return cls(
                     intent=intent,
                     context=MessageContext.from_dict(context_data),
-                    hints=RoutingHints.from_dict(payload.get("hints", {})) if payload.get("hints") else None,
+                    hints=RoutingHints.from_dict(payload.get("hints", {}))
+                    if payload.get("hints")
+                    else None,
                     structured_data=payload.get("structured_data"),
                 )
 
-            # It's JSON but not in our expected format - treat as structured intent
             return cls(
                 intent=text,
                 context=MessageContext(),
@@ -827,67 +693,40 @@ class AgentMessage:
             )
 
         except json.JSONDecodeError:
-            # Plain text - treat as raw intent
             return cls(
                 intent=text,
                 context=MessageContext(),
             )
 
 
-@dataclass
-class AgentResponse:
-    """Standard response format from agents.
+class AgentResponse(BaseModel):
+    """Standard response format from agents."""
 
-    Agents should return their results in this format for consistency.
-    """
-    # The main response content (text or structured data)
     content: str
-
-    # Structured output data
-    data: Dict[str, Any] = field(default_factory=dict)
-
-    # Whether the request was successful
+    data: Dict[str, Any] = Field(default_factory=dict)
     success: bool = True
-
-    # Error message if not successful
     error: Optional[str] = None
-
-    # Metadata about the execution
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
-        result = {
-            "content": self.content,
-            "data": self.data,
-            "success": self.success,
-            "metadata": self.metadata,
-        }
-        if self.error:
-            result["error"] = self.error
-        return result
+        return self.model_dump(exclude_none=True)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "AgentResponse":
+    def from_dict(cls, data: Dict[str, Any]) -> AgentResponse:
         """Create from dictionary."""
-        return cls(
-            content=data.get("content", ""),
-            data=data.get("data", {}),
-            success=data.get("success", True),
-            error=data.get("error"),
-            metadata=data.get("metadata", {}),
-        )
+        return cls.model_validate(data)
 
     @classmethod
     def success_response(
         cls,
         content: str,
         data: Optional[Dict[str, Any]] = None,
-    ) -> "AgentResponse":
+    ) -> AgentResponse:
         """Create a successful response."""
         return cls(content=content, data=data or {}, success=True)
 
     @classmethod
-    def error_response(cls, error: str) -> "AgentResponse":
+    def error_response(cls, error: str) -> AgentResponse:
         """Create an error response."""
         return cls(content=error, success=False, error=error)

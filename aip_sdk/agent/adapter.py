@@ -20,10 +20,6 @@ from a2a.types import (
 )
 from a2a.utils.message import get_message_text
 
-# Backwards compatibility aliases
-Skill = AgentSkill
-Provider = AgentProvider
-
 from aip_sdk.types import Task as SDKTask, TaskResult, AgentContext, AgentMessage, MessageContext
 
 if TYPE_CHECKING:
@@ -43,86 +39,43 @@ def extract_text_from_message(message: Message) -> str:
 
 
 def extract_payload_from_message(message: Message) -> Dict[str, Any]:
-    """Extract structured payload from an A2A Message.
-
-    Handles both:
-    1. New AgentMessage format: {"intent": "...", "context": {...}, "hints": {...}}
-    2. Legacy format: Plain text or old task format
-    """
+    """Extract structured payload from an A2A Message."""
     text = extract_text_from_message(message)
 
-    # Try to parse as JSON
     try:
         data = json.loads(text)
 
-        # Check for new AgentMessage format
         if "intent" in data and "context" in data:
-            # Return the full AgentMessage structure
             return data
 
-        # Legacy task format
-        if "task" in data:
-            return data["task"].get("payload", data)
-
-        # Plain JSON payload
         return data
 
     except json.JSONDecodeError:
         pass
 
-    # Check metadata for structured payload
     if message.metadata and "payload" in message.metadata:
         return message.metadata["payload"]
 
-    # Return as query (legacy fallback)
-    return {"query": text}
+    return {"intent": text}
 
 
 def parse_agent_message(message: Message) -> AgentMessage:
-    """Parse an A2A Message into AgentMessage format.
-
-    This is the recommended way for adapters to receive messages from AIP.
-    It handles both new and legacy formats.
-    """
+    """Parse an A2A Message into AgentMessage format."""
     text = get_message_text(message)
 
-    # Try to parse as JSON
     try:
         data = json.loads(text)
 
-        # Check for new AgentMessage format
         if "intent" in data and "context" in data:
             return AgentMessage.from_dict(data)
 
-        # Legacy task format
-        if "task" in data:
-            task_data = data["task"]
-            payload = task_data.get("payload", {})
-
-            # Extract intent from payload or description
-            intent = payload.get("intent") or payload.get("user_request") or task_data.get("description", "")
-
-            # Build context from available data
-            context_data = payload.get("context", {})
-            if not context_data:
-                context_data = {
-                    "run_id": task_data.get("task_id", ""),
-                    "caller_id": "unknown",
-                }
-
-            return AgentMessage(
-                intent=intent,
-                context=MessageContext.from_dict(context_data),
-            )
-
-        # It's JSON but not in expected format
         return AgentMessage(
             intent=text,
             context=MessageContext(run_id="", caller_id=""),
+            structured_data=data if isinstance(data, dict) else None,
         )
 
     except json.JSONDecodeError:
-        # Plain text
         return AgentMessage(
             intent=text,
             context=MessageContext(run_id="", caller_id=""),
@@ -442,13 +395,10 @@ class A2AAgentAdapter:
                 }
             )
 
-            # Extract payload - preserve the full AgentMessage structure
-            payload = {
+            # Extract payload
+            payload: Dict[str, Any] = {
                 "intent": agent_message.intent,
                 "context": agent_message.context.to_dict(),
-                # Legacy compatibility
-                "query": agent_message.intent,
-                "user_request": agent_message.intent,
             }
             if agent_message.hints:
                 payload["hints"] = agent_message.hints.to_dict()

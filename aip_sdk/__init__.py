@@ -6,7 +6,7 @@ Organized into three main modules:
 - agent: Agent development tools (adapters, context, external agents)
 """
 
-# Platform client (backward compatible imports)
+# Platform client
 from aip_sdk.platform import (
     AIPClient,
     AsyncAIPClient,
@@ -45,7 +45,7 @@ from aip_sdk.types import (
     PaginatedResponse,
     UserInfo,
     PriceInfo,
-    # Agent Communication Types (new)
+    # Agent Communication Types
     AgentMessage,
     MessageContext,
     RoutingHints,
