@@ -239,7 +239,23 @@ class AgentContext:
         payload: Dict[str, Any],
         reason: str = "",
     ) -> TaskResult:
-        """Call another agent with a task."""
+        """Call another agent with a task.
+
+        This method routes through the AIP orchestrator which handles:
+        - Payment charging
+        - Logging to Membase
+        - Caller chain tracking
+        - Gateway routing (for remote agents)
+
+        Args:
+            agent_id: The target agent's ID (e.g., "calculator.compute")
+            task_name: Name of the task to execute
+            payload: Task payload (will be wrapped in AgentMessage format)
+            reason: Optional reason for the call (for logging)
+
+        Returns:
+            TaskResult from the target agent
+        """
         from uuid import uuid4
         task = Task(
             task_id=str(uuid4()),
@@ -256,6 +272,40 @@ class AgentContext:
                 downstream_calls=getattr(result, 'downstream_calls', []),
             )
         return result
+
+    async def call_agent_with_intent(
+        self,
+        agent_id: str,
+        intent: str,
+        *,
+        structured_data: Optional[Dict[str, Any]] = None,
+        reason: str = "",
+    ) -> TaskResult:
+        """Call another agent with an AgentMessage-style intent.
+
+        This is a convenience method for inter-agent communication that
+        uses the standard AgentMessage format. The platform will wrap
+        the intent in proper context (run_id, caller_chain, etc.).
+
+        Args:
+            agent_id: The target agent's ID
+            intent: The raw intent/request for the target agent
+            structured_data: Optional structured parameters
+            reason: Optional reason for the call
+
+        Returns:
+            TaskResult from the target agent
+        """
+        payload: Dict[str, Any] = {"user_request": intent}
+        if structured_data:
+            payload["structured_data"] = structured_data
+
+        return await self.call_agent(
+            agent_id=agent_id,
+            task_name="agent_request",
+            payload=payload,
+            reason=reason,
+        )
 
     def log(self, event_type: str, **data: Any) -> None:
         """Log an event."""
@@ -537,3 +587,307 @@ class PriceInfo:
             currency=data.get("currency", "USD"),
             metadata=data.get("metadata", {}),
         )
+
+
+# =============================================================================
+# Agent Communication Types
+# =============================================================================
+# These types define the standard message format for inter-agent communication.
+# The key principle: AIP handles routing/payment/logging, agents handle understanding.
+
+
+@dataclass
+class MessageContext:
+    """Context provided by AIP platform for agent communication.
+
+    This contains metadata about the request that the agent may use
+    for logging, tracing, or context-aware responses.
+    """
+    run_id: str = ""
+    caller_id: str = ""
+    conversation_id: Optional[str] = None
+    payment_authorized: bool = True
+    caller_chain: List[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "run_id": self.run_id,
+            "caller_id": self.caller_id,
+            "conversation_id": self.conversation_id,
+            "payment_authorized": self.payment_authorized,
+            "caller_chain": self.caller_chain,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MessageContext":
+        """Create from dictionary."""
+        return cls(
+            run_id=data.get("run_id", ""),
+            caller_id=data.get("caller_id", ""),
+            conversation_id=data.get("conversation_id"),
+            payment_authorized=data.get("payment_authorized", True),
+            caller_chain=data.get("caller_chain", []),
+            metadata=data.get("metadata", {}),
+        )
+
+
+@dataclass
+class RoutingHints:
+    """Optional hints from the routing layer.
+
+    These are suggestions from AIP's routing system that agents may use
+    to assist with understanding, but agents are free to ignore them.
+    """
+    detected_category: Optional[str] = None
+    extracted_entities: Dict[str, Any] = field(default_factory=dict)
+    confidence: Optional[float] = None
+    suggested_task: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        result: Dict[str, Any] = {}
+        if self.detected_category:
+            result["detected_category"] = self.detected_category
+        if self.extracted_entities:
+            result["extracted_entities"] = self.extracted_entities
+        if self.confidence is not None:
+            result["confidence"] = self.confidence
+        if self.suggested_task:
+            result["suggested_task"] = self.suggested_task
+        return result
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "RoutingHints":
+        """Create from dictionary."""
+        return cls(
+            detected_category=data.get("detected_category"),
+            extracted_entities=data.get("extracted_entities", {}),
+            confidence=data.get("confidence"),
+            suggested_task=data.get("suggested_task"),
+        )
+
+
+@dataclass
+class AgentMessage:
+    """Universal message format for agent communication.
+
+    This is the standard envelope for all requests to agents through AIP.
+    The key principle: the `intent` field contains the raw user request,
+    and it's the agent's responsibility to interpret it.
+
+    The platform provides:
+    - Routing (which agent handles this)
+    - Payment (charging caller, paying agent)
+    - Logging (recording to Membase)
+    - Context (caller info, run_id, etc.)
+
+    The agent handles:
+    - Understanding the intent
+    - Extracting parameters
+    - Executing the task
+    - Formatting the response
+
+    Example:
+        message = AgentMessage(
+            intent="What's the weather in Tokyo?",
+            context=MessageContext(run_id="abc", caller_id="user:alice"),
+        )
+    """
+    # The raw user intent - can be natural language or structured JSON
+    intent: str
+
+    # Platform-provided context (run_id, caller, etc.)
+    context: MessageContext
+
+    # Optional routing hints from the platform (agent can ignore)
+    hints: Optional[RoutingHints] = None
+
+    # Optional structured data if intent is JSON
+    structured_data: Optional[Dict[str, Any]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        result = {
+            "intent": self.intent,
+            "context": self.context.to_dict(),
+        }
+        if self.hints:
+            result["hints"] = self.hints.to_dict()
+        if self.structured_data:
+            result["structured_data"] = self.structured_data
+        return result
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AgentMessage":
+        """Create from dictionary."""
+        context_data = data.get("context", {})
+        hints_data = data.get("hints")
+
+        return cls(
+            intent=data.get("intent", ""),
+            context=MessageContext.from_dict(context_data),
+            hints=RoutingHints.from_dict(hints_data) if hints_data else None,
+            structured_data=data.get("structured_data"),
+        )
+
+    def get_intent_as_json(self) -> Optional[Dict[str, Any]]:
+        """Try to parse intent as JSON, return None if not valid JSON."""
+        import json
+        try:
+            return json.loads(self.intent)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+    @classmethod
+    def create(
+        cls,
+        intent: str,
+        *,
+        run_id: str,
+        caller_id: str,
+        conversation_id: Optional[str] = None,
+        hints: Optional[RoutingHints] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> "AgentMessage":
+        """Convenience factory to create an AgentMessage."""
+        return cls(
+            intent=intent,
+            context=MessageContext(
+                run_id=run_id,
+                caller_id=caller_id,
+                conversation_id=conversation_id,
+                metadata=metadata or {},
+            ),
+            hints=hints,
+        )
+
+    @classmethod
+    def from_a2a_message(cls, message: Any) -> "AgentMessage":
+        """Parse an A2A Message into AgentMessage format.
+
+        This handles both:
+        1. New format: JSON with intent, context, hints
+        2. Legacy format: Plain text or old task format
+
+        Args:
+            message: An A2A Message object (from a2a.types.Message)
+
+        Returns:
+            AgentMessage with parsed intent and context
+        """
+        import json
+
+        # Extract text from message parts
+        text_parts = []
+        if hasattr(message, 'parts'):
+            for part in message.parts:
+                if hasattr(part, 'text'):
+                    text_parts.append(part.text)
+        text = " ".join(text_parts)
+
+        # Try to parse as JSON
+        try:
+            data = json.loads(text)
+
+            # Check if it's the new AgentMessage format
+            if "intent" in data and "context" in data:
+                return cls.from_dict(data)
+
+            # Check if it's the old task format
+            if "task" in data:
+                task_data = data["task"]
+                payload = task_data.get("payload", {})
+
+                # Extract intent from payload or description
+                intent = payload.get("intent") or payload.get("user_request") or task_data.get("description", "")
+
+                # Build context from available data
+                context_data = payload.get("context", {})
+                if not context_data:
+                    context_data = {
+                        "run_id": task_data.get("task_id", ""),
+                        "caller_id": "unknown",
+                    }
+
+                return cls(
+                    intent=intent,
+                    context=MessageContext.from_dict(context_data),
+                    hints=RoutingHints.from_dict(payload.get("hints", {})) if payload.get("hints") else None,
+                    structured_data=payload.get("structured_data"),
+                )
+
+            # It's JSON but not in our expected format - treat as structured intent
+            return cls(
+                intent=text,
+                context=MessageContext(),
+                structured_data=data,
+            )
+
+        except json.JSONDecodeError:
+            # Plain text - treat as raw intent
+            return cls(
+                intent=text,
+                context=MessageContext(),
+            )
+
+
+@dataclass
+class AgentResponse:
+    """Standard response format from agents.
+
+    Agents should return their results in this format for consistency.
+    """
+    # The main response content (text or structured data)
+    content: str
+
+    # Structured output data
+    data: Dict[str, Any] = field(default_factory=dict)
+
+    # Whether the request was successful
+    success: bool = True
+
+    # Error message if not successful
+    error: Optional[str] = None
+
+    # Metadata about the execution
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        result = {
+            "content": self.content,
+            "data": self.data,
+            "success": self.success,
+            "metadata": self.metadata,
+        }
+        if self.error:
+            result["error"] = self.error
+        return result
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AgentResponse":
+        """Create from dictionary."""
+        return cls(
+            content=data.get("content", ""),
+            data=data.get("data", {}),
+            success=data.get("success", True),
+            error=data.get("error"),
+            metadata=data.get("metadata", {}),
+        )
+
+    @classmethod
+    def success_response(
+        cls,
+        content: str,
+        data: Optional[Dict[str, Any]] = None,
+    ) -> "AgentResponse":
+        """Create a successful response."""
+        return cls(content=content, data=data or {}, success=True)
+
+    @classmethod
+    def error_response(cls, error: str) -> "AgentResponse":
+        """Create an error response."""
+        return cls(content=error, success=False, error=error)

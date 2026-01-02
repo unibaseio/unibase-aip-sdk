@@ -19,6 +19,7 @@ from aip_sdk.agent.adapter import (
     adapt_agent,
     extract_text_from_message,
     extract_payload_from_message,
+    parse_agent_message,
     task_result_to_message,
     agent_config_to_card,
 )
@@ -41,6 +42,7 @@ __all__ = [
     "adapt_agent",
     "extract_text_from_message",
     "extract_payload_from_message",
+    "parse_agent_message",
     "task_result_to_message",
     "agent_config_to_card",
     # External agent (Pull mode)

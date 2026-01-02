@@ -45,6 +45,11 @@ from aip_sdk.types import (
     PaginatedResponse,
     UserInfo,
     PriceInfo,
+    # Agent Communication Types (new)
+    AgentMessage,
+    MessageContext,
+    RoutingHints,
+    AgentResponse,
 )
 
 # Exceptions
@@ -94,6 +99,11 @@ __all__ = [
     "PaginatedResponse",
     "UserInfo",
     "PriceInfo",
+    # Agent Communication Types
+    "AgentMessage",
+    "MessageContext",
+    "RoutingHints",
+    "AgentResponse",
     # Exceptions
     "AIPError",
     "ConnectionError",
