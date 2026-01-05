@@ -361,7 +361,7 @@ class AgentContext:
                 summary = ""
 
                 for msg in reversed(result_task.history):
-                    if msg.role == Role.AGENT:
+                    if msg.role == Role.agent:
                         text = extract_text_from_message(msg)
                         summary = text
                         try:
@@ -379,7 +379,7 @@ class AgentContext:
                             if "data" not in output:
                                 output["data"] = part.data
 
-                success = result_task.status.state == TaskState.COMPLETED
+                success = result_task.status.state == TaskState.completed
                 error = None
                 if not success and result_task.status.message:
                     error = extract_text_from_message(result_task.status.message)
@@ -654,10 +654,9 @@ class AgentMessage(BaseModel):
         import json
 
         text_parts = []
-        if hasattr(message, "parts"):
-            for part in message.parts:
-                if hasattr(part, "text"):
-                    text_parts.append(part.text)
+        for part in message.parts:
+            if hasattr(part, "text") and part.text:
+                text_parts.append(part.text)
         text = " ".join(text_parts)
 
         try:

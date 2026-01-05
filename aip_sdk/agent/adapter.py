@@ -21,6 +21,7 @@ from a2a.types import (
 from a2a.utils.message import get_message_text
 
 from aip_sdk.types import Task as SDKTask, TaskResult, AgentContext, AgentMessage, MessageContext
+from aip_sdk.messaging import MessageHelpers, AIPMetadata
 
 if TYPE_CHECKING:
     from aip_sdk.gateway.a2a_client import GatewayA2AClient
@@ -29,71 +30,64 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def extract_text_from_message(message: Message) -> str:
-    """Extract plain text content from an A2A Message."""
-    texts = []
-    for part in message.parts:
-        if hasattr(part, "text"):
-            texts.append(part.text)
-    return " ".join(texts)
-
-
-def extract_payload_from_message(message: Message) -> Dict[str, Any]:
-    """Extract structured payload from an A2A Message."""
-    text = extract_text_from_message(message)
-
-    try:
-        data = json.loads(text)
-
-        if "intent" in data and "context" in data:
-            return data
-
-        return data
-
-    except json.JSONDecodeError:
-        pass
-
-    if message.metadata and "payload" in message.metadata:
-        return message.metadata["payload"]
-
-    return {"intent": text}
-
-
 def parse_agent_message(message: Message) -> AgentMessage:
-    """Parse an A2A Message into AgentMessage format."""
+    """Parse an A2A Message into AgentMessage format.
+
+    Uses MessageHelpers for simplified parsing.
+    """
+    # First try to parse as JSON with old format
     text = get_message_text(message)
 
     try:
         data = json.loads(text)
-
         if "intent" in data and "context" in data:
             return AgentMessage.from_dict(data)
-
-        return AgentMessage(
-            intent=text,
-            context=MessageContext(run_id="", caller_id=""),
-            structured_data=data if isinstance(data, dict) else None,
-        )
-
     except json.JSONDecodeError:
-        return AgentMessage(
-            intent=text,
-            context=MessageContext(run_id="", caller_id=""),
-        )
+        pass
+
+    # Convert A2A Message to AgentMessage format
+    aip_meta = MessageHelpers.get_aip_metadata(message)
+    structured = MessageHelpers.get_structured_data(message)
+
+    agent_msg_dict = {
+        "intent": text,
+        "context": {
+            "run_id": aip_meta.run_id if aip_meta else "",
+            "caller_id": aip_meta.caller_id if aip_meta else "",
+            "caller_chain": aip_meta.caller_chain if aip_meta else [],
+            "conversation_id": aip_meta.conversation_id if aip_meta else None,
+            "payment_authorized": aip_meta.payment_authorized if aip_meta else True,
+            "metadata": aip_meta.custom if aip_meta else {},
+        }
+    }
+
+    if aip_meta and aip_meta.routing_hints:
+        agent_msg_dict["hints"] = aip_meta.routing_hints.to_dict()
+
+    if structured:
+        agent_msg_dict["structured_data"] = structured
+
+    return AgentMessage.from_dict(agent_msg_dict)
 
 
 def task_result_to_message(result: TaskResult) -> Message:
-    """Convert a TaskResult to an A2A Message."""
+    """Convert a TaskResult to an A2A Message.
+
+    Uses MessageHelpers for consistent message format.
+    """
     # Build response text
     if result.success:
-        if result.summary:
-            text = result.summary
-        else:
-            text = json.dumps(result.output, indent=2)
+        text = result.summary or json.dumps(result.output, indent=2)
     else:
         text = f"Error: {result.error or 'Unknown error'}"
 
-    return Message.agent(text)
+    # Use MessageHelpers to create properly formatted agent message
+    return MessageHelpers.create_agent_message(
+        text=text,
+        success=result.success,
+        output=result.output if result.success else None,
+        error=result.error if not result.success else None,
+    )
 
 
 def agent_config_to_card(
@@ -232,55 +226,46 @@ class A2AAgentAdapter:
             sub_task: Any,
             reason: str = "",
         ) -> TaskResult:
-            """Invoke another agent via A2A through gateway."""
+            """Invoke another agent via A2A through gateway.
+
+            Uses MessageHelpers for message creation and parsing.
+            """
             if not gateway_client:
                 return TaskResult.error_result(
                     "Agent invocation not available (no gateway client)"
                 )
 
-            # Convert task to A2A message
+            # Convert task to A2A message using MessageHelpers
             if isinstance(sub_task, dict):
                 payload = sub_task
             elif hasattr(sub_task, "payload"):
                 payload = sub_task.payload
             else:
-                payload = {"task": str(sub_task)}
+                payload = {"intent": str(sub_task)}
 
-            message = Message.user(json.dumps(payload))
-
-            # Import here to avoid circular import
-            from aip_sdk.agent.context import AIPContext
-
-            # Create AIP context for the call
-            aip_context = AIPContext(
-                run_id=run_id,
-                caller_agent=self._agent.agent_id,
-                caller_chain=[],
-            )
+            # Create proper A2A message with AIP metadata
+            message = MessageHelpers.from_agent_message_dict(payload)
 
             try:
                 result_task = await gateway_client.send_task(
                     agent_id=agent_id,
                     message=message,
                     context_id=task.context_id,
-                    aip_context=aip_context,
                 )
 
                 # Convert A2A Task to TaskResult
-                if result_task.status.state == TaskState.COMPLETED:
-                    # Get response from history or artifacts
+                if result_task.status.state == TaskState.completed:
+                    # Get response from history
                     output = {}
                     summary = ""
 
                     if result_task.history:
                         last_msg = result_task.history[-1]
-                        if last_msg.role == Role.AGENT:
-                            summary = extract_text_from_message(last_msg)
-                            try:
-                                output = json.loads(summary)
-                            except json.JSONDecodeError:
-                                output = {"response": summary}
+                        if last_msg.role == Role.agent:
+                            summary = MessageHelpers.get_text(last_msg)
+                            output = MessageHelpers.get_structured_data(last_msg) or {}
 
+                    # Add artifacts if present
                     if result_task.artifacts:
                         for artifact in result_task.artifacts:
                             for part in artifact.parts:
@@ -296,7 +281,7 @@ class A2AAgentAdapter:
                 else:
                     error_msg = "Task failed"
                     if result_task.status.message:
-                        error_msg = extract_text_from_message(result_task.status.message)
+                        error_msg = MessageHelpers.get_text(result_task.status.message)
                     return TaskResult.error_result(error_msg)
 
             except Exception as e:
@@ -354,7 +339,7 @@ class A2AAgentAdapter:
             status_update=TaskStatusUpdateEvent(
                 task_id=task.id,
                 context_id=task.context_id,
-                status=TaskStatus(state=TaskState.WORKING),
+                status=TaskStatus(state=TaskState.working),
             )
         )
 
@@ -362,7 +347,7 @@ class A2AAgentAdapter:
             # Get the last user message from history
             user_message = None
             for msg in reversed(task.history):
-                if msg.role == Role.USER:
+                if msg.role == Role.user:
                     user_message = msg
                     break
 
@@ -373,7 +358,7 @@ class A2AAgentAdapter:
                         task_id=task.id,
                         context_id=task.context_id,
                         status=TaskStatus(
-                            state=TaskState.FAILED,
+                            state=TaskState.failed,
                             message=Message.agent("No user message in task"),
                         ),
                         final=True,
@@ -442,7 +427,7 @@ class A2AAgentAdapter:
                 )
 
             # Yield completion status
-            final_state = TaskState.COMPLETED if result.success else TaskState.FAILED
+            final_state = TaskState.completed if result.success else TaskState.failed
             status_message = None if result.success else Message.agent(result.error or "Unknown error")
 
             yield StreamResponse(
@@ -464,7 +449,7 @@ class A2AAgentAdapter:
                     task_id=task.id,
                     context_id=task.context_id,
                     status=TaskStatus(
-                        state=TaskState.FAILED,
+                        state=TaskState.failed,
                         message=Message.agent(str(e)),
                     ),
                     final=True,

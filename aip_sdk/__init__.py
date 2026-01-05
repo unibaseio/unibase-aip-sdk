@@ -52,6 +52,14 @@ from aip_sdk.types import (
     AgentResponse,
 )
 
+# Messaging (A2A extensions)
+from aip_sdk.messaging import (
+    MessageHelpers,
+    AIPMetadata,
+    PaymentEvent,
+    AIP_METADATA_KEY,
+)
+
 # Exceptions
 from aip_sdk.exceptions import (
     AIPError,
@@ -104,6 +112,11 @@ __all__ = [
     "MessageContext",
     "RoutingHints",
     "AgentResponse",
+    # Messaging (A2A Extensions)
+    "MessageHelpers",
+    "AIPMetadata",
+    "PaymentEvent",
+    "AIP_METADATA_KEY",
     # Exceptions
     "AIPError",
     "ConnectionError",

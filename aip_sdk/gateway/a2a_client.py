@@ -128,7 +128,7 @@ class GatewayA2AClient(A2AClientInterface):
         # Build JSON-RPC request
         params = {
             "id": task_id,
-            "message": message.to_dict(),
+            "message": message.model_dump(mode='json'),
         }
         if context_id:
             params["contextId"] = context_id
@@ -145,7 +145,7 @@ class GatewayA2AClient(A2AClientInterface):
             # Gateway A2A endpoint: /gateway/a2a/{agent_id}
             response = await client.post(
                 f"{self._gateway_url}/gateway/a2a/{agent_id}",
-                json=request.to_dict(),
+                json=request.model_dump(mode='json'),
                 headers={**self._headers, "Content-Type": "application/json"},
             )
             response.raise_for_status()
@@ -157,7 +157,10 @@ class GatewayA2AClient(A2AClientInterface):
                     status_code=data["error"].get("code"),
                 )
 
-            return Task.from_dict(data["result"])
+            result = data.get("result", {})
+
+            # Expect A2A Task object
+            return Task.model_validate(result)
 
         except httpx.HTTPStatusError as e:
             raise GatewayError(
@@ -179,7 +182,7 @@ class GatewayA2AClient(A2AClientInterface):
 
         params = {
             "id": task_id,
-            "message": message.to_dict(),
+            "message": message.model_dump(mode='json'),
         }
         if context_id:
             params["contextId"] = context_id
@@ -194,7 +197,7 @@ class GatewayA2AClient(A2AClientInterface):
             async with client.stream(
                 "POST",
                 f"{self._gateway_url}/gateway/a2a/{agent_id}/stream",
-                json=request.to_dict(),
+                json=request.model_dump(mode='json'),
                 headers={**self._headers, "Content-Type": "application/json"},
             ) as response:
                 response.raise_for_status()
@@ -231,8 +234,8 @@ class GatewayA2AClient(A2AClientInterface):
         # Create initial task
         task = Task(
             id=task_id,
-            context_id=context_id,
-            status=TaskStatus(state=TaskState.SUBMITTED),
+            context_id=context_id or task_id,
+            status=TaskStatus(state=TaskState.submitted),
             history=[message],
         )
         self._pending_tasks[task_id] = task
@@ -245,7 +248,7 @@ class GatewayA2AClient(A2AClientInterface):
                     "task_id": task_id,
                     "agent": agent_id,
                     "payload": {
-                        "message": message.to_dict(),
+                        "message": message.model_dump(mode='json'),
                         "context_id": context_id,
                         "metadata": message.metadata,
                     },
@@ -258,26 +261,26 @@ class GatewayA2AClient(A2AClientInterface):
 
         except httpx.HTTPStatusError as e:
             task.status = TaskStatus(
-                state=TaskState.FAILED,
+                state=TaskState.failed,
                 message=Message.agent(f"Gateway error: {e.response.status_code}"),
             )
             return task
         except httpx.RequestError as e:
             task.status = TaskStatus(
-                state=TaskState.FAILED,
+                state=TaskState.failed,
                 message=Message.agent(f"Request error: {e}"),
             )
             return task
 
         # Poll for completion
-        task.status = TaskStatus(state=TaskState.WORKING)
+        task.status = TaskStatus(state=TaskState.working)
         start_time = asyncio.get_event_loop().time()
 
         while True:
             elapsed = asyncio.get_event_loop().time() - start_time
             if elapsed > self._max_poll_time:
                 task.status = TaskStatus(
-                    state=TaskState.FAILED,
+                    state=TaskState.failed,
                     message=Message.agent(f"Task timed out after {self._max_poll_time}s"),
                 )
                 raise TaskTimeoutError(task_id, self._max_poll_time)
@@ -305,7 +308,7 @@ class GatewayA2AClient(A2AClientInterface):
                     result_data = result_response.json()
 
                     # Update task with result
-                    task.status = TaskStatus(state=TaskState.COMPLETED)
+                    task.status = TaskStatus(state=TaskState.completed)
                     if "result" in result_data:
                         # Parse result into task format
                         self._apply_result(task, result_data["result"])
@@ -316,14 +319,14 @@ class GatewayA2AClient(A2AClientInterface):
                 elif status == "failed":
                     error_msg = data.get("error", "Unknown error")
                     task.status = TaskStatus(
-                        state=TaskState.FAILED,
+                        state=TaskState.failed,
                         message=Message.agent(error_msg),
                     )
                     del self._pending_tasks[task_id]
                     return task
 
                 elif status == "canceled":
-                    task.status = TaskStatus(state=TaskState.CANCELED)
+                    task.status = TaskStatus(state=TaskState.canceled)
                     del self._pending_tasks[task_id]
                     return task
 
@@ -333,31 +336,16 @@ class GatewayA2AClient(A2AClientInterface):
 
     def _apply_result(self, task: Task, result: Dict) -> None:
         """Apply result data to task."""
-        from a2a.types import TextPart, Artifact
+        from a2a.types import Artifact
 
-        # Handle different result formats
+        # Expect A2A message format
         if "message" in result:
-            # A2A message format
-            task.history.append(Message.from_dict(result["message"]))
-
-        elif "text" in result or "response" in result:
-            # Simple text response
-            text = result.get("text") or result.get("response", "")
-            task.history.append(Message.agent(text))
-
-        elif "result" in result:
-            # Nested result (common gateway format)
-            nested = result["result"]
-            if isinstance(nested, str):
-                task.history.append(Message.agent(nested))
-            elif isinstance(nested, dict):
-                import json
-                task.history.append(Message.agent(json.dumps(nested)))
+            task.history.append(Message.model_validate(result["message"]))
 
         # Handle artifacts if present
         if "artifacts" in result:
             for artifact_data in result["artifacts"]:
-                task.artifacts.append(Artifact.from_dict(artifact_data))
+                task.artifacts.append(Artifact.model_validate(artifact_data))
 
     def _parse_stream_response(self, data: Dict) -> "StreamResponse":
         """Parse stream response data."""
@@ -372,15 +360,15 @@ class GatewayA2AClient(A2AClientInterface):
         response = StreamResponse()
 
         if "task" in data:
-            response.task = Task.from_dict(data["task"])
+            response.task = Task.model_validate(data["task"])
         elif "message" in data:
-            response.message = Message.from_dict(data["message"])
+            response.message = Message.model_validate(data["message"])
         elif "statusUpdate" in data:
             update = data["statusUpdate"]
             response.status_update = TaskStatusUpdateEvent(
                 task_id=update["taskId"],
                 context_id=update.get("contextId"),
-                status=TaskStatus.from_dict(update["status"]),
+                status=TaskStatus.model_validate(update["status"]),
                 final=update.get("final", False),
             )
         elif "artifactUpdate" in data:
@@ -388,7 +376,7 @@ class GatewayA2AClient(A2AClientInterface):
             response.artifact_update = TaskArtifactUpdateEvent(
                 task_id=update["taskId"],
                 context_id=update.get("contextId"),
-                artifact=Artifact.from_dict(update["artifact"]),
+                artifact=Artifact.model_validate(update["artifact"]),
             )
 
         return response
@@ -407,7 +395,7 @@ class GatewayA2AClient(A2AClientInterface):
             )
             response.raise_for_status()
 
-            card = AgentCard.from_dict(response.json())
+            card = AgentCard.model_validate(response.json())
             self._agent_cards[agent_id] = card
             return card
 
@@ -432,7 +420,7 @@ class GatewayA2AClient(A2AClientInterface):
             # Update local tracking
             if task_id in self._pending_tasks:
                 self._pending_tasks[task_id].status = TaskStatus(
-                    state=TaskState.CANCELED
+                    state=TaskState.canceled
                 )
 
             return True
@@ -459,7 +447,7 @@ class GatewayA2AClient(A2AClientInterface):
             response.raise_for_status()
 
             data = response.json()
-            return Task.from_dict(data)
+            return Task.model_validate(data)
 
         except httpx.HTTPStatusError:
             return None
@@ -487,7 +475,7 @@ class GatewayA2AClient(A2AClientInterface):
             )
             response.raise_for_status()
 
-            card = AgentCard.from_dict(response.json())
+            card = AgentCard.model_validate(response.json())
             # Cache the discovered agent
             self._agent_cards[card.name] = card
             logger.info(f"Discovered agent: {card.name} at {endpoint_url}")

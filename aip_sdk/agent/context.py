@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
 from a2a.types import Message
@@ -108,6 +109,7 @@ def wrap_message(
     }
 
     return Message(
+        message_id=message.message_id or str(uuid.uuid4()),
         role=message.role,
         parts=message.parts,
         metadata=new_metadata,
@@ -123,9 +125,10 @@ def unwrap_message(message: Message) -> Tuple[Message, Optional[AIPContext]]:
     aip_data = metadata.pop(AIP_CONTEXT_KEY, None)
 
     clean_message = Message(
+        message_id=message.message_id or str(uuid.uuid4()),
         role=message.role,
         parts=message.parts,
-        metadata=metadata if metadata else None,
+        metadata=metadata or None,
     )
 
     aip_context = AIPContext.from_dict(aip_data) if aip_data else None
