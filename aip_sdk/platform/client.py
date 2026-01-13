@@ -19,6 +19,7 @@ import httpx
 
 from aip_sdk.types import (
     AgentConfig,
+    AgentGroupConfig,
     AgentInfo,
     EventData,
     RunResult,
@@ -207,6 +208,30 @@ class AsyncAIPClient:
         except httpx.HTTPStatusError as e:
             raise AIPError(
                 f"Failed to unregister agent {agent_id}: {e}"
+            )
+
+    async def register_agent_group(
+        self,
+        group: Union[AgentGroupConfig, Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Register an agent group.
+        """
+        if isinstance(group, AgentGroupConfig):
+            reg_data = group.to_registration_dict()
+        else:
+            reg_data = group
+
+        try:
+            response = await self.client.post(
+                "/agents/groups/register",
+                json=reg_data,
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            raise RegistrationError(
+                f"Failed to register agent group '{reg_data.get('group_name')}': {e}",
+                handle=reg_data.get("group_name"),
             )
 
     async def run(

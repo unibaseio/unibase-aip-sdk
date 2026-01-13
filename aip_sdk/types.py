@@ -161,6 +161,33 @@ class AgentConfig(BaseModel):
         }
 
 
+class AgentGroupConfig(BaseModel):
+    """Configuration for an agent group with intelligent routing.
+    """
+
+    name: str
+    description: str = ""
+    member_agent_ids: List[str]
+    price: float = 0.0
+    currency: str = "USD"
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    def to_registration_dict(self) -> Dict[str, Any]:
+        """Convert to AIP registration format."""
+        handle = self.name.lower().replace(" ", "_").replace("-", "_")
+
+        return {
+            "group_name": handle,
+            "display_name": self.name,
+            "member_agent_ids": self.member_agent_ids,
+            "price": {
+                "amount": self.price,
+                "currency": self.currency,
+            },
+            "metadata": self.metadata,
+        }
+
+
 class TaskResult(BaseModel):
     """Result of a task execution."""
 
