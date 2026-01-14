@@ -341,9 +341,9 @@ class AgentContext:
         import json
 
         from a2a.types import Message, Role, TaskState
+        from a2a.utils.message import get_message_text
 
         try:
-            from aip_sdk.agent.adapter import extract_text_from_message
             from aip_sdk.agent.context import AIPContext, PaymentContextData
         except ImportError:
             raise ImportError(
@@ -389,7 +389,7 @@ class AgentContext:
 
                 for msg in reversed(result_task.history):
                     if msg.role == Role.agent:
-                        text = extract_text_from_message(msg)
+                        text = get_message_text(msg)
                         summary = text
                         try:
                             output = json.loads(text)
@@ -409,7 +409,7 @@ class AgentContext:
                 success = result_task.status.state == TaskState.completed
                 error = None
                 if not success and result_task.status.message:
-                    error = extract_text_from_message(result_task.status.message)
+                    error = get_message_text(result_task.status.message)
 
                 return TaskResult(
                     output=output,

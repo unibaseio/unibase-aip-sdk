@@ -8,6 +8,8 @@ Python SDK for integrating with the Unibase AIP platform.
 pip install unibase-aip-sdk
 ```
 
+> **Note:** This package depends on `a2a-sdk` (Google's Agent-to-Agent Protocol SDK). If you have an unrelated package named `a2a` (v0.44) installed, it will conflict. Uninstall it first with `pip uninstall a2a`.
+
 ## Quick Start
 
 ```python
