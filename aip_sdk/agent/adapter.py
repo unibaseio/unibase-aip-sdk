@@ -244,7 +244,13 @@ class A2AAgentAdapter:
                 payload = {"intent": str(sub_task)}
 
             # Create proper A2A message with AIP metadata
-            message = MessageHelpers.from_agent_message_dict(payload)
+            text = payload.get("intent", str(payload)) if isinstance(payload, dict) else str(payload)
+            message = MessageHelpers.create_user_message(
+                text=text,
+                run_id=str(uuid.uuid4()),
+                caller_id=task.context_id or "unknown",
+                structured_data=payload if isinstance(payload, dict) else None,
+            )
 
             try:
                 result_task = await gateway_client.send_task(

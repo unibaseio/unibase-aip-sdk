@@ -180,6 +180,15 @@ class AsyncAIPClient:
         else:
             reg_data = agent
 
+        # IMPORTANT: Add user_id to payload for blockchain registration
+        reg_data["user_id"] = user_id
+
+        # Debug: log the registration payload
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[BLOCKCHAIN DEBUG] Registering agent with payload containing user_id: {user_id}")
+        logger.info(f"[BLOCKCHAIN DEBUG] Full payload keys: {list(reg_data.keys())}")
+
         try:
             response = await self.client.post(
                 f"/users/{user_id}/agents/register",
