@@ -9,10 +9,12 @@ This example demonstrates how to register an agent using the AIP SDK:
 - Handle registration errors
 
 Prerequisites:
-- AIP platform running (default: http://localhost:8001)
+- Install: uv pip install -e .
 
 Environment Variables:
-- AIP_SDK_BASE_URL: Override the AIP platform URL
+- AIP_ENDPOINT: AIP platform URL (default: http://localhost:8001)
+  For production: export AIP_ENDPOINT=http://api.aip.unibase.com
+- TEST_WALLET: Wallet address for testing (default: 0x5ea13664c5ce67753f208540d25b913788aa3daa)
 """
 
 import asyncio
@@ -47,16 +49,14 @@ async def main():
         print("  Platform is healthy")
         print()
 
-        # 2. Register user (required before registering agents)
-        print("[2/4] Registering user...")
+        # 2. Use existing test user
+        print("[2/4] Using test user...")
         try:
-            user = await client.register_user(
-                wallet_address="0xdemo123456789abcdef123456789abcdef12345678",
-                email="developer@example.com"
-            )
-            user_id = user["user_id"]
+            # Use the test wallet from environment or default
+            test_wallet = os.environ.get("TEST_WALLET", "0x5ea13664c5ce67753f208540d25b913788aa3daa")
+            user_id = f"user:{test_wallet}"
             print(f"  User ID: {user_id}")
-        except AIPError as e:
+        except Exception as e:
             print(f"  ERROR: {e}")
             return
         print()

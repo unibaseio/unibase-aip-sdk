@@ -8,11 +8,12 @@ This example shows how to use the AIP SDK to:
 - Check agent pricing
 
 Prerequisites:
-- AIP platform running (default: http://localhost:8001)
+- Install: uv pip install -e .
 
 Environment Variables:
-- AIP_SDK_BASE_URL: Override the AIP platform URL
-- AIP_PUBLIC_URL: Alternative override for AIP platform URL
+- AIP_ENDPOINT: AIP platform URL (default: http://localhost:8001)
+  For production: export AIP_ENDPOINT=http://api.aip.unibase.com
+- TEST_WALLET: Wallet address for testing (default: 0x5ea13664c5ce67753f208540d25b913788aa3daa)
 """
 
 import asyncio
@@ -32,11 +33,10 @@ async def main():
             print("Platform not available")
             return
 
-        # Register/get user
-        user = await client.register_user(
-            wallet_address="0xdemo000000000000000000000000000000000000"
-        )
-        user_id = user["user_id"]
+        # Use existing test user (or register if needed)
+        # Use the test wallet from environment or default
+        test_wallet = os.environ.get("TEST_WALLET", "0x5ea13664c5ce67753f208540d25b913788aa3daa")
+        user_id = f"user:{test_wallet}"
 
         # List agents with pagination
         print("\nAvailable Agents:")

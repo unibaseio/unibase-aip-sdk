@@ -9,12 +9,12 @@ This example demonstrates how to use the AIP SDK client to:
 - Stream task events
 
 Prerequisites:
-- AIP platform running (default: http://localhost:8001)
-- Install: pip install -e packages/unibase-aip-sdk
+- Install: uv pip install -e .
 
 Environment Variables:
-- AIP_SDK_BASE_URL: Override the AIP platform URL
-- AIP_PUBLIC_URL: Alternative override for AIP platform URL
+- AIP_ENDPOINT: AIP platform URL (default: http://localhost:8001)
+  For production: export AIP_ENDPOINT=http://api.aip.unibase.com
+- TEST_WALLET: Wallet address for testing (default: 0x5ea13664c5ce67753f208540d25b913788aa3daa)
 """
 
 import asyncio
@@ -45,16 +45,14 @@ async def main():
             print("  ERROR: Platform not available. Start with ./scripts/start.sh")
             return
 
-        # 2. Register a user
+        # 2. Use existing test user
         print()
-        print("[2/5] Registering User")
+        print("[2/5] Using Test User")
         print("-" * 70)
 
-        user = await client.register_user(
-            wallet_address="0x1234567890abcdef1234567890abcdef12345678",
-            email="demo@example.com"
-        )
-        user_id = user.get("user_id")
+        # Use the test wallet from environment or default
+        test_wallet = os.environ.get("TEST_WALLET", "0x5ea13664c5ce67753f208540d25b913788aa3daa")
+        user_id = f"user:{test_wallet}"
         print(f"  User ID: {user_id}")
 
         # 3. List available agents
