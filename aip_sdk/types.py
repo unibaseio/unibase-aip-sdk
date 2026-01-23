@@ -444,7 +444,7 @@ class EventData(BaseModel):
     @property
     def is_completed(self) -> bool:
         """Check if this event indicates completion."""
-        return self.event_type in ("run.completed", "orchestrator.completed")
+        return self.event_type in ("run.completed", "run_completed", "orchestrator.completed", "orchestrator_completed")
 
     @property
     def is_error(self) -> bool:

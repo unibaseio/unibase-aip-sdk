@@ -11,6 +11,7 @@ from a2a.types import (
     TaskState,
     TaskStatus,
     Message,
+    Role,
     AgentCard,
     TaskStatusUpdateEvent,
     JSONRPCRequest,
@@ -240,24 +241,35 @@ class GatewayA2AClient(A2AClientInterface):
         )
         self._pending_tasks[task_id] = task
 
+        # Extract handle from agent_id (format: erc8004:handle or just handle)
+        agent_handle = agent_id.split(":")[-1] if ":" in agent_id else agent_id
+
         # Submit to gateway task queue
+        # Construct A2A JSON-RPC message/send request
+        jsonrpc_request = {
+            "jsonrpc": "2.0",
+            "method": "message/send",
+            "params": {
+                "message": message.model_dump(mode='json'),
+                "id": task_id,
+                "contextId": context_id,
+            },
+            "id": task_id,
+        }
+
         try:
             response = await client.post(
                 f"{self._gateway_url}/gateway/tasks/submit",
                 json={
                     "task_id": task_id,
-                    "agent": agent_id,
-                    "payload": {
-                        "message": message.model_dump(mode='json'),
-                        "context_id": context_id,
-                        "metadata": message.metadata,
-                    },
+                    "agent": agent_handle,  # Use handle, not full agent_id
+                    "payload": jsonrpc_request,  # Send complete JSON-RPC request
                 },
                 headers=self._headers,
             )
             response.raise_for_status()
 
-            logger.debug(f"Task {task_id} submitted to gateway queue")
+            logger.debug(f"Task {task_id} submitted to gateway queue for agent {agent_handle}")
 
         except httpx.HTTPStatusError as e:
             task.status = TaskStatus(
@@ -296,9 +308,12 @@ class GatewayA2AClient(A2AClientInterface):
                 data = response.json()
 
                 status = data.get("status", "pending")
-                logger.debug(f"Task {task_id} status: {status}")
+                print(f"[DEBUG _pull_send] Task {task_id} status: {status}")
+                logger.debug(f"[_pull_send] Task {task_id} status: {status}")
 
                 if status == "completed":
+                    print(f"[DEBUG _pull_send] Task completed, fetching result...")
+                    logger.debug(f"[_pull_send] Task completed, fetching result...")
                     # Fetch full result
                     result_response = await client.get(
                         f"{self._gateway_url}/gateway/tasks/{task_id}/result",
@@ -306,12 +321,20 @@ class GatewayA2AClient(A2AClientInterface):
                     )
                     result_response.raise_for_status()
                     result_data = result_response.json()
+                    print(f"[DEBUG _pull_send] Result data keys: {list(result_data.keys())}")
+                    print(f"[DEBUG _pull_send] Has 'result' key: {'result' in result_data}")
+                    logger.debug(f"[_pull_send] Result data keys: {result_data.keys()}")
+                    logger.debug(f"[_pull_send] Has 'result' key: {'result' in result_data}")
 
                     # Update task with result
                     task.status = TaskStatus(state=TaskState.completed)
                     if "result" in result_data:
+                        print(f"[DEBUG _pull_send] Calling _apply_result...")
+                        logger.debug(f"[_pull_send] Calling _apply_result...")
                         # Parse result into task format
                         self._apply_result(task, result_data["result"])
+                        print(f"[DEBUG _pull_send] After _apply_result, task.history length: {len(task.history)}")
+                        logger.debug(f"[_pull_send] After _apply_result, task.history length: {len(task.history)}")
 
                     del self._pending_tasks[task_id]
                     return task
@@ -337,14 +360,49 @@ class GatewayA2AClient(A2AClientInterface):
     def _apply_result(self, task: Task, result: Dict) -> None:
         """Apply result data to task."""
         from a2a.types import Artifact
+        import json
 
-        # Expect A2A message format
-        if "message" in result:
-            task.history.append(Message.model_validate(result["message"]))
+        # Debug logging
+        logger.debug(f"[_apply_result] Called with result keys: {result.keys()}")
+        logger.debug(f"[_apply_result] Result type: {type(result)}")
+        logger.debug(f"[_apply_result] Result preview: {json.dumps(result, indent=2)[:500]}")
+
+        # Result is a JSON-RPC response: {"jsonrpc": "2.0", "id": "...", "result": {...}}
+        # The actual task data is in result["result"]
+        task_data = result.get("result", result)  # Fall back to result if no nested "result"
+
+        logger.debug(f"[_apply_result] Task data keys: {task_data.keys() if isinstance(task_data, dict) else 'not a dict'}")
+
+        # Task data should be a complete Task object from agent
+        # Extract history (messages) and artifacts from it
+        if "history" in task_data:
+            logger.debug(f"[_apply_result] Found history with {len(task_data['history'])} messages")
+            print(f"[DEBUG _apply_result] Found history with {len(task_data['history'])} messages")
+            # History is an array of messages - add agent messages to task
+            agent_msg_count = 0
+            for i, msg_data in enumerate(task_data["history"]):
+                msg = Message.model_validate(msg_data)
+                logger.debug(f"[_apply_result] Message {i+1}: role={msg.role}")
+                print(f"[DEBUG _apply_result] Message {i+1}: role={msg.role}")
+                # Only add agent messages (skip user messages that are already in history)
+                if msg.role == Role.agent:
+                    agent_msg_count += 1
+                    from a2a.utils.message import get_message_text
+                    msg_text = get_message_text(msg)
+                    logger.debug(f"[_apply_result] Adding agent message #{agent_msg_count} to task.history, text preview: {msg_text[:100] if msg_text else 'None'}")
+                    print(f"[DEBUG _apply_result] Adding agent message #{agent_msg_count}, text preview: {msg_text[:100] if msg_text else 'None'}")
+                    task.history.append(msg)
+            print(f"[DEBUG _apply_result] Total agent messages added: {agent_msg_count}")
+            logger.debug(f"[_apply_result] Total agent messages added: {agent_msg_count}")
+            print(f"[DEBUG _apply_result] Task.history now has {len(task.history)} total messages")
+            logger.debug(f"[_apply_result] Task.history now has {len(task.history)} total messages")
+        else:
+            logger.warning(f"[_apply_result] No history found in task_data!")
+            print(f"[DEBUG _apply_result] WARNING: No history found in task_data!")
 
         # Handle artifacts if present
-        if "artifacts" in result:
-            for artifact_data in result["artifacts"]:
+        if "artifacts" in task_data and task_data["artifacts"]:
+            for artifact_data in task_data["artifacts"]:
                 task.artifacts.append(Artifact.model_validate(artifact_data))
 
     def _parse_stream_response(self, data: Dict) -> "StreamResponse":
