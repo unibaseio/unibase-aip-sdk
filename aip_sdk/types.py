@@ -504,12 +504,22 @@ class AgentInfo(BaseModel):
         if isinstance(price_data, dict):
             price_amount = price_data.get("amount", 0.0)
 
+        # Handle capabilities - can be list or dict
+        capabilities_raw = card.get("capabilities", [])
+        if isinstance(capabilities_raw, dict):
+            # Convert dict to list of enabled capability names
+            capabilities = [k for k, v in capabilities_raw.items() if v]
+        elif isinstance(capabilities_raw, list):
+            capabilities = capabilities_raw
+        else:
+            capabilities = []
+
         return cls(
             agent_id=data.get("agent_id", ""),
             handle=data.get("handle", ""),
             name=card.get("name", data.get("name", "")),
             description=card.get("description", data.get("description", "")),
-            capabilities=card.get("capabilities", []),
+            capabilities=capabilities,
             skills=data.get("skills", []),
             price=price_amount,
             endpoint_url=data.get("endpoint_url"),
