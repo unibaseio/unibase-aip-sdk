@@ -1,332 +1,490 @@
-# Unibase AIP SDK
+# Unibase AIP SDK Examples
 
-**Official Python SDK for the Unibase Agent Interoperability Protocol (AIP)**
+Complete tutorial for building client applications that call AI agents through the Unibase AIP platform.
 
-The AIP SDK enables applications to interact with the Unibase decentralized agent ecosystem - discover agents, invoke their capabilities, and manage payments through the X402 protocol.
+## Table of Contents
 
-## What is AIP?
+1. [Getting Started](#getting-started)
+2. [Environment Setup](#environment-setup)
+3. [Test Account](#test-account)
+4. [Client Development Workflow](#client-development-workflow)
+5. [Architecture](#architecture)
+6. [Tutorial: Building Your First Client](#tutorial-building-your-first-client)
+7. [Reference](#reference)
+8. [Next Steps](#next-steps)
 
-The **Agent Interoperability Protocol (AIP)** is Unibase's decentralized platform for agent discovery, execution, and payment. It provides:
+---
 
-- 🔍 **Agent Discovery** - Find and query AI agents across the network
-- 🚀 **Task Execution** - Invoke agent capabilities with automatic routing
-- 💰 **Payment Settlement** - Transparent micro-payments via X402 protocol
-- 📊 **Run Tracking** - Monitor execution history and costs
-- 🌐 **Gateway Routing** - Connect to remote agents through decentralized gateways
+## Getting Started
 
-## Who Should Use This SDK?
+### What is Unibase AIP SDK?
 
-**Application Developers** who want to:
-- Build apps that consume AI agent capabilities
-- Integrate multiple agents into workflows
-- Track and manage agent execution costs
-- Query the decentralized agent registry
+The **Unibase AIP SDK** is a Python client library for building applications that interact with AI agents on the Unibase AIP platform.
 
-**Agent Developers** who want to:
-- Register their agents with the AIP platform
-- Make agents discoverable to applications
-- Enable automatic payment collection
-- Monitor agent usage and performance
+**Capabilities:**
+- 🤖 **Call agents** - Invoke agents by handle
+- 📡 **Stream events** - Get real-time updates on task execution
+- 💰 **Automatic payments** - X402 payment handling built-in
+- 💭 **Conversation memory** - Membase integration for context persistence
 
-## Installation
+### Prerequisites
 
-Install from source:
+- **Python**: 3.10 or higher
+- **Package Manager**: `uv` (recommended) or `pip`
+- **OS**: Linux, macOS, or Windows with WSL
+
+### Clone the Repository
+
+First, clone the Unibase AIP repository:
 
 ```bash
-# Clone the SDK repository
-git clone https://github.com/unibaseio/unibase-aip-sdk.git
-cd unibase-aip-sdk
+git clone https://github.com/unibase/unibase-aip.git
+cd unibase-aip
+```
 
-# Install in editable mode
+### Install the SDK
+
+Navigate to the AIP SDK directory and install:
+
+```bash
+cd packages/unibase-aip-sdk
 uv pip install -e .
 ```
 
-## Quick Start
+Or with pip:
 
-### Consuming Agents (Application Developer)
+```bash
+pip install -e .
+```
+
+---
+
+## Environment Setup
+
+Configure these environment variables before running examples:
+
+### Required Variables
+
+```bash
+# AIP Platform endpoint
+export AIP_ENDPOINT="http://api.aip.unibase.com"
+
+# For local development, use:
+# export AIP_ENDPOINT="http://localhost:8001"
+```
+
+### Optional Variables
+
+```bash
+# Sample test account (provided with test tokens)
+export MEMBASE_ACCOUNT="0x5ea13664c5ce67753f208540d25b913788aa3daa"
+export MEMBASE_SECRET_KEY="<contact us for test account credentials>"
+```
+
+---
+
+## Test Account
+
+We provide a **sample test account** with pre-loaded test tokens for trying the SDK.
+
+### What You Can Do
+
+- ✅ **Call agents** - Invoke any agent on the platform
+- ✅ **Make payments** - Process X402 payments automatically
+- ✅ **Use memory** - Store conversation context in Membase
+- ✅ **Stream events** - Get real-time updates on task execution
+- ✅ **Full platform access** - Try all SDK features
+
+### Getting Credentials
+
+**To get test account credentials**: Contact the Unibase team or check the project documentation.
+
+### Important Notes
+
+- 🔒 This is a **shared test account** for demonstration only
+- ⚠️ **Do not use for production** or store real value
+- 🔑 **For production**: Use your own wallet credentials
+- 🚫 **Never commit** private keys to git
+
+---
+
+## Client Development Workflow
+
+Building a client application with the AIP SDK involves these steps:
+
+### Step 1: Initialize the Client
+
+Create an `AsyncAIPClient` instance connected to the AIP platform:
 
 ```python
 from aip_sdk import AsyncAIPClient
 
-# Connect to AIP platform
-client = AsyncAIPClient(base_url="https://api.aip.unibase.com")
+async with AsyncAIPClient(base_url="http://api.aip.unibase.com") as client:
+    # Client is ready to use
+    pass
+```
 
-# Execute a task - AIP handles agent discovery and routing
+### Step 2: Call an Agent
+
+Invoke an agent with an objective (task description):
+
+```python
 result = await client.run(
-    objective="What is the weather in Tokyo?",
-    agent="weather.forecast",  # Agent handle
-    user_id="user:0x123..."
-)
-
-print(result.output)  # Agent's response
-print(result.payments)  # Automatic payment breakdown
-```
-
-### Registering Agents (Agent Developer)
-
-```python
-from aip_sdk import AsyncAIPClient, AgentConfig, SkillConfig
-
-client = AsyncAIPClient(base_url="https://api.aip.unibase.com")
-
-# Register your agent with AIP
-config = AgentConfig(
-    agent_id="weather.forecast",
-    name="Weather Forecast Agent",
-    description="Provides weather forecasts worldwide",
-    endpoint_url="https://my-agent.com",
-    skills=[
-        SkillConfig(
-            id="get_forecast",
-            name="Get Forecast",
-            description="Get weather forecast for a location"
-        )
-    ]
-)
-
-agent = await client.register_agent(
-    user_id="user:0x123...",
-    agent=config
+    objective="What's the weather in Tokyo?",
+    agent="weather_public",  # Agent handle
+    user_id="user:0x...",    # Your user identifier
 )
 ```
 
-## Core Capabilities
+### Step 3: Handle Results
 
-### 1. Agent Discovery & Management
+Process the response from the agent:
 
 ```python
-# List available agents
-agents = await client.list_user_agents(user_id="user:0x123...")
-
-# Get agent details
-agent = await client.get_agent(user_id="user:0x123...", agent_id="weather.forecast")
-
-# Query agent capabilities
-print(agent.skills)  # Available skills
-print(agent.price)   # Pricing information
+if result.success:
+    print(f"Output: {result.output}")
+else:
+    print(f"Error: {result.status}")
 ```
 
-### 2. Task Execution
+### Step 4: Stream Events (Optional)
+
+For long-running tasks, stream real-time events:
 
 ```python
-# Simple execution
-result = await client.run(
-    objective="Translate 'hello' to Spanish",
-    agent="translator",
-    user_id="user:0x123..."
-)
-
-# Streaming execution (real-time events)
 async for event in client.run_stream(
-    objective="Analyze this document",
-    agent="analyzer",
-    user_id="user:0x123..."
+    objective="Complex task",
+    agent="agent_handle",
+    user_id="user:0x...",
 ):
-    if event.type == "agent_response":
-        print(event.data)
+    print(f"Event: {event.event_type}")
+    if event.event_type == "run_completed":
+        break
 ```
 
-### 3. Payment & Cost Tracking
-
-```python
-# Execution includes automatic payment tracking
-result = await client.run(...)
-
-# View payment breakdown
-for payment in result.payments:
-    print(f"Agent: {payment['agent']}, Cost: {payment['amount']}")
-
-# Get historical payments
-payments = await client.get_run_payments(run_id="run_123")
-```
-
-### 4. Agent Groups (Multi-Agent Workflows)
-
-```python
-from aip_sdk import AgentGroupConfig
-
-# Create agent group with intelligent routing
-group = AgentGroupConfig(
-    name="data_analysis_pipeline",
-    description="End-to-end data analysis workflow",
-    member_agent_ids=[
-        "data.cleaner",
-        "data.analyzer",
-        "report.generator"
-    ]
-)
-
-await client.register_agent_group(group)
-
-# Invoke entire group
-result = await client.run(
-    objective="Analyze sales data and create report",
-    agent="group:data_analysis_pipeline",
-    user_id="user:0x123..."
-)
-```
+---
 
 ## Architecture
 
+### How Client and AIP Platform Work Together
+
 ```
 ┌─────────────────┐
-│  Your App/Agent │
+│  Your Client    │
+│  Application    │
 └────────┬────────┘
-         │ AIP SDK
-         ▼
-┌─────────────────────────┐
-│   AIP Platform          │
-│  - Agent Registry       │
-│  - Task Routing         │
-│  - Payment Settlement   │
-└────────┬────────────────┘
          │
-    ┌────┴─────┬──────────┐
-    ▼          ▼          ▼
-┌────────┐ ┌────────┐ ┌────────┐
-│Agent A │ │Agent B │ │Agent C │
-└────────┘ └────────┘ └────────┘
+         │ 1. client.run(objective, agent, user_id)
+         │
+         v
+┌─────────────────┐
+│  AIP Platform   │
+│  (API Layer)    │
+└────────┬────────┘
+         │
+         │ 2. Route request to Gateway
+         │    - Validate user
+         │    - Handle payment
+         │
+         v
+┌─────────────────┐
+│    Gateway      │
+│ (Agent Router)  │
+└────────┬────────┘
+         │
+         ├─────────────────┬─────────────────┐
+         │                 │                 │
+         v                 v                 v
+    ┌────────┐      ┌─────────┐      ┌──────────┐
+    │ Agent  │      │ Agent   │      │  Agent   │
+    │   A    │      │   B     │      │    C     │
+    │(Public)│      │(Private)│      │ (Public) │
+    └────┬───┘      └────┬────┘      └────┬─────┘
+         │               │                 │
+         │ 3. Process request              │
+         │    - Execute task               │
+         │    - Store memory (Membase)     │
+         │                                 │
+         └───────────┬─────────────────────┘
+                     │
+                     │ 4. Return result
+                     │
+                     v
+              ┌─────────────┐
+              │     AIP     │
+              │  Platform   │
+              └──────┬──────┘
+                     │
+                     │ 5. Stream events back
+                     │    - agent_invoked
+                     │    - payment.settled
+                     │    - memory_uploaded
+                     │    - agent_completed
+                     │    - run_completed
+                     │
+                     v
+              ┌─────────────┐
+              │    Your     │
+              │   Client    │
+              └─────────────┘
 ```
 
-## API Reference
+### Key Components
 
-### AsyncAIPClient
+1. **Your Client** - Application built with AIP SDK
+2. **AIP Platform** - API layer handling routing, payments, memory
+3. **Gateway** - Routes requests to appropriate agents
+4. **Agents** - AI agents (public or private) that process tasks
 
-Main client for interacting with AIP platform.
+### Request Flow
+
+1. **Client calls AIP** - `client.run(objective, agent, user_id)`
+2. **AIP routes request** - Validates user, handles payment
+3. **Gateway delivers** - Sends task to agent (DIRECT or POLLING mode)
+4. **Agent processes** - Executes task, stores memory
+5. **Results return** - Events stream back to client
+
+---
+
+## Tutorial: Building Your First Client
+
+Let's build a complete client application step by step.
+
+### Example Overview
+
+We'll create a client that:
+1. Calls a public weather agent
+2. Calls a private calculator agent
+3. Streams events in real-time
+
+See the complete example: [client_example.py](client_example.py)
+
+---
+
+### Step 1: Import the SDK
 
 ```python
-client = AsyncAIPClient(
-    base_url="https://api.aip.unibase.com",
-    timeout=60.0
-)
+import asyncio
+from aip_sdk import AsyncAIPClient
 ```
 
-**User Management:**
-- `register_user(wallet_address, email)` - Register a new user
-- `list_users(limit, offset)` - List all users
+---
 
-**Agent Management:**
-- `register_agent(user_id, agent)` - Register an agent
-- `list_user_agents(user_id)` - List user's agents
-- `get_agent(user_id, agent_id)` - Get agent details
-- `unregister_agent(user_id, agent_id)` - Remove an agent
-
-**Task Execution:**
-- `run(objective, agent, user_id)` - Execute task (blocking)
-- `run_stream(objective, agent, user_id)` - Execute task (streaming)
-- `get_run_events(run_id)` - Get execution events
-- `get_run_payments(run_id)` - Get payment history
-
-**Agent Groups:**
-- `register_agent_group(group)` - Create agent group
-- `list_agent_groups()` - List available groups
-
-### GatewayClient
-
-For advanced gateway operations.
+### Step 2: Initialize the Client
 
 ```python
-from aip_sdk import GatewayClient
+async def call_agent_example():
+    aip_endpoint = "http://api.aip.unibase.com"
+    user_id = "user:0x5eA13664c5ce67753f208540d25B913788Aa3DaA"
 
-gateway = GatewayClient(gateway_url="https://gateway.aip.unibase.com")
-
-# Register agent with gateway
-await gateway.register_agent(
-    handle="my-agent",
-    endpoint_url="https://my-agent.com"
-)
-
-# Health check
-healthy = await gateway.health_check()
+    async with AsyncAIPClient(base_url=aip_endpoint) as client:
+        # Client is ready
+        pass
 ```
 
-### GatewayA2AClient
+**Key parameters:**
+- `base_url`: AIP platform endpoint
+- `user_id`: Your user identifier (format: `user:<wallet_address>`)
 
-For direct A2A protocol communication through gateway.
+---
 
-```python
-from aip_sdk import GatewayA2AClient
+### Step 3: Call a Specific Agent
 
-a2a = GatewayA2AClient(gateway_url="https://gateway.aip.unibase.com")
-
-# Execute A2A task
-result = await a2a.execute_task(
-    agent_name="calculator",
-    message="Calculate 2 + 2"
-)
-```
-
-## Configuration
+Call the weather agent directly:
 
 ```python
-from aip_sdk import ClientConfig, AsyncAIPClient
-
-config = ClientConfig(
-    base_url="https://api.aip.unibase.com",
-    timeout=60.0,
-    headers={"Authorization": "Bearer token"}
-)
-
-client = AsyncAIPClient(config=config)
-```
-
-## Environment Variables
-
-- `AIP_ENDPOINT` - AIP platform URL (default: `http://localhost:8001`)
-- `GATEWAY_URL` - Gateway URL (default: `http://localhost:8080`)
-
-## Error Handling
-
-```python
-from aip_sdk import (
-    AIPError,
-    AgentNotFoundError,
-    ExecutionError,
-    PaymentError
-)
-
-try:
+async with AsyncAIPClient(base_url=aip_endpoint) as client:
     result = await client.run(
-        objective="Process data",
-        agent="processor",
-        user_id="user:0x123..."
+        objective="What's the weather in Tokyo?",
+        agent="weather_public",
+        user_id=user_id,
+        timeout=30.0,
     )
-except AgentNotFoundError:
-    print("Agent not found in registry")
-except ExecutionError as e:
-    print(f"Task execution failed: {e}")
-except PaymentError as e:
-    print(f"Payment failed: {e}")
+
+    print(f"Success: {result.success}")
+    print(f"Output: {result.output}")
 ```
 
-## Development
+**Parameters:**
+- `objective`: Task description
+- `agent`: Agent handle
+- `user_id`: Your user identifier
+- `timeout`: Max wait time in seconds
+
+---
+
+### Step 4: Stream Events in Real-time
+
+For long tasks, stream events to show progress:
+
+```python
+from datetime import datetime
+
+async for event in client.run_stream(
+    objective="Calculate 50 * 2",
+    agent="calculator_private",
+    user_id=user_id,
+):
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    event_type = event.event_type
+
+    print(f"[{timestamp}] {event_type}")
+
+    # Handle different event types
+    if event_type == "agent_invoked":
+        print(f"  → Agent started: {event.payload.get('agent')}")
+
+    elif event_type == "payment.settled":
+        amount = event.payload.get('amount')
+        print(f"  → Payment: ${amount} USD")
+
+    elif event_type == "memory_uploaded":
+        operation = event.payload.get('operation')
+        print(f"  → Memory: {operation}")
+
+    elif event_type == "agent_completed":
+        print(f"  → Agent completed")
+
+    elif event_type == "run_completed":
+        output = event.payload.get('output')
+        print(f"  → Final output: {output}")
+        break
+```
+
+**Event types you'll receive:**
+
+| Event Type | Description | Payload |
+|------------|-------------|---------|
+| `agent_invoked` | Agent started | `agent`: agent handle |
+| `payment.settled` | Payment processed | `amount`: USD amount |
+| `memory_uploaded` | Memory saved | `operation`: operation type |
+| `agent_completed` | Agent finished | - |
+| `run_completed` | Task success | `output`: final result |
+| `run_error` | Task failed | `error`: error message |
+
+---
+
+### Step 5: Check Platform Health
+
+Before making calls, verify the platform is available:
+
+```python
+async with AsyncAIPClient(base_url=aip_endpoint) as client:
+    is_healthy = await client.health_check()
+
+    if not is_healthy:
+        print("ERROR: AIP platform is not available")
+        return
+
+    print("✓ AIP platform is healthy")
+```
+
+---
+
+### Complete Example
+
+Here's the full client implementation:
+
+```python
+#!/usr/bin/env python3
+import asyncio
+import os
+from aip_sdk import AsyncAIPClient
+
+async def main():
+    # Configuration
+    aip_endpoint = os.environ.get("AIP_ENDPOINT", "http://api.aip.unibase.com")
+    user_id = "user:0x5eA13664c5ce67753f208540d25B913788Aa3DaA"
+
+    async with AsyncAIPClient(base_url=aip_endpoint) as client:
+        # 1. Check platform health
+        if not await client.health_check():
+            print("ERROR: AIP platform not available")
+            return
+
+        # 2. Call weather agent
+        result = await client.run(
+            objective="What's the weather in Tokyo?",
+            agent="weather_public",
+            user_id=user_id,
+        )
+        print(f"Weather: {result.output}")
+
+        # 3. Call calculator agent
+        result = await client.run(
+            objective="Calculate 2 + 2",
+            agent="calculator_private",
+            user_id=user_id,
+        )
+        print(f"Math: {result.output}")
+
+        # 4. Stream events
+        async for event in client.run_stream(
+            objective="Calculate 50 * 2",
+            agent="calculator_private",
+            user_id=user_id,
+        ):
+            print(f"Event: {event.event_type}")
+            if event.event_type == "run_completed":
+                print(f"Result: {event.payload.get('output')}")
+                break
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+**Run it:**
 
 ```bash
-# Install in editable mode
-uv pip install -e .
-
-# Run tests
-pytest tests/
-
-# Type checking
-mypy aip_sdk/
+python packages/unibase-aip-sdk/examples/client_example.py
 ```
 
-## Examples
+---
 
-See `examples/` directory:
-- `client_usage.py` - Complete client usage walkthrough
-- `list_agents.py` - Discover and query agents
-- `register_agent.py` - Register your agent with AIP
-- `invoke_agents.py` - Direct HTTP invocation examples
+## Reference
 
-## Learn More
+### Quick Commands
 
-- [Unibase Documentation](https://docs.unibase.com)
-- [AIP Protocol Specification](https://docs.unibase.com/aip)
-- [X402 Payment Protocol](https://docs.unibase.com/x402)
-- [Agent Development Guide](https://docs.unibase.com/agents)
+```bash
+# Clone repository
+git clone https://github.com/unibase/unibase-aip.git
+cd unibase-aip
 
-## License
+# Install SDK
+cd packages/unibase-aip-sdk
+uv pip install -e .
 
-MIT
+# Set environment
+export AIP_ENDPOINT="http://api.aip.unibase.com"
+export MEMBASE_ACCOUNT="0x5ea13664c5ce67753f208540d25b913788aa3daa"
+export MEMBASE_SECRET_KEY="<contact us for credentials>"
+
+# Run example
+python examples/client_example.py
+```
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `AIP_ENDPOINT` | Yes | AIP platform URL |
+| `MEMBASE_ACCOUNT` | Optional | Wallet address for test account |
+| `MEMBASE_SECRET_KEY` | Optional | Wallet private key for test account |
+
+---
+
+## Next Steps
+
+### 1. Study the Complete Example
+
+Read and run the full implementation:
+- **File**: [client_example.py](client_example.py)
+- **Run**: `python packages/unibase-aip-sdk/examples/client_example.py`
+
+### 2. Build Your Own Agents
+
+To create your own AI agents, visit the Agent SDK documentation:
+
+**[Agent SDK Examples →](../../unibase-agent-sdk/examples/)**
+
+Learn how to build, deploy, and monetize agents on the Unibase AIP platform.
