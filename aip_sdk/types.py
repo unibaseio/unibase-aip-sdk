@@ -488,6 +488,7 @@ class AgentInfo(BaseModel):
     handle: str
     name: str
     description: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
     capabilities: List[str] = Field(default_factory=list)
     skills: List[Dict[str, Any]] = Field(default_factory=list)
     price: float = 0.0
@@ -514,16 +515,18 @@ class AgentInfo(BaseModel):
         else:
             capabilities = []
 
+        metadata = data.get("metadata", {})
         return cls(
             agent_id=data.get("agent_id", ""),
             handle=data.get("handle", ""),
             name=card.get("name", data.get("name", "")),
             description=card.get("description", data.get("description", "")),
+            metadata=metadata,
             capabilities=capabilities,
             skills=data.get("skills", []),
             price=price_amount,
             endpoint_url=data.get("endpoint_url"),
-            on_chain=data.get("metadata", {}).get("onchain", False),
+            on_chain=metadata.get("onchain", False),
             identity_address=data.get("identity_address"),
         )
 
