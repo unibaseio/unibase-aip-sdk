@@ -528,7 +528,7 @@ class GatewayA2AClient(A2AClientInterface):
         try:
             # Try to fetch agent card from the endpoint
             response = await client.get(
-                f"{endpoint_url}/.well-known/agent.json",
+                f"{endpoint_url}/.well-known/agent-card.json",
                 headers=self._headers,
             )
             response.raise_for_status()
