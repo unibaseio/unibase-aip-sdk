@@ -21,7 +21,7 @@ from aip_sdk.gateway.interface import A2AClientInterface
 from aip_sdk.agent.context import AIPContext, wrap_message
 
 if TYPE_CHECKING:
-    from unibase_agent_sdk.a2a import StreamResponse
+    from aip_sdk.a2a import StreamResponse
 
 logger = logging.getLogger(__name__)
 
@@ -413,7 +413,7 @@ class GatewayA2AClient(A2AClientInterface):
             TaskStatus,
             Artifact,
         )
-        from unibase_agent_sdk.a2a import StreamResponse
+        from aip_sdk.a2a import StreamResponse
 
         response = StreamResponse()
 

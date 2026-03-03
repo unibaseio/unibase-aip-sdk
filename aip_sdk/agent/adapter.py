@@ -25,7 +25,7 @@ from aip_sdk.messaging import MessageHelpers, AIPMetadata
 
 if TYPE_CHECKING:
     from aip_sdk.gateway.a2a_client import GatewayA2AClient
-    from unibase_agent_sdk.a2a import StreamResponse
+    from aip_sdk.a2a import StreamResponse
 
 logger = logging.getLogger(__name__)
 
@@ -336,7 +336,7 @@ class A2AAgentAdapter:
         task: A2ATask,
     ) -> AsyncGenerator["StreamResponse", None]:
         """Handle an A2A Task by calling the wrapped agent."""
-        from unibase_agent_sdk.a2a import StreamResponse
+        from aip_sdk.a2a import StreamResponse
 
         run_id = task.context_id or str(uuid.uuid4())
 

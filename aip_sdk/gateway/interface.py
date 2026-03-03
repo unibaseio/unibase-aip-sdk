@@ -16,7 +16,7 @@ from aip_sdk.agent.context import AIPContext
 from aip_sdk.exceptions import AgentNotFoundError
 
 if TYPE_CHECKING:
-    from unibase_agent_sdk.a2a import StreamResponse
+    from aip_sdk.a2a import StreamResponse
 
 
 # Type alias for task handlers
