@@ -15,7 +15,7 @@ def generate_agent_card(
     identity: AgentIdentity,
     base_url: str,
     description: Optional[str] = None,
-    skills: Optional[List[AgentSkill]] = None,
+    skills: Optional[List[AgentSkillCard]] = None,
     capabilities: Optional[AgentCapabilities] = None,
     provider: Optional[AgentProvider] = None,
     version: str = "1.0.0",
