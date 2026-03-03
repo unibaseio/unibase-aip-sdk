@@ -17,13 +17,14 @@ import os
 
 # Import directly from Google A2A SDK
 from a2a.types import (
-    AgentCard,
-    AgentSkill,
-    AgentCapabilities,
-    Task,
+    TaskState,
+    TaskStatus,
+    TaskStatusUpdateEvent,
     Message,
     Role,
+    Task,
 )
+from aip_sdk.types import AgentCard, AgentSkillCard, AgentCapabilities, AgentProvider, AgentService
 from a2a.utils.message import get_message_text
 from a2a.client.helpers import create_text_message_object
 
@@ -212,7 +213,7 @@ def expose_as_a2a(
     port: int = 8000,
     host: str = "0.0.0.0",
     description: str = None,
-    skills: List[AgentSkill] = None,
+    skills: List[AgentSkillCard] = None,
     streaming: bool = False,
     raw_response: bool = False, 
     version: str = "1.0.0",
@@ -270,7 +271,7 @@ def expose_as_a2a(
     if skills is None:
         skill_id = name.lower().replace(" ", "_")
         skills = [
-            AgentSkill(
+            AgentSkillCard(
                 id=skill_id,
                 name=name,
                 description=description,
@@ -400,14 +401,14 @@ class AgentWrapper:
                     f"Agent has no method '{method_name}' for skill '{skill_id}'"
                 )
 
-    def _build_skills(self) -> List[AgentSkill]:
-        """Build AgentSkill list from skill_methods."""
+    def _build_skills(self) -> List[AgentSkillCard]:
+        """Build AgentSkillCard list from skill_methods."""
         skills = []
         for skill_id, method_name in self.skill_methods.items():
             method = getattr(self.agent, method_name)
             doc = method.__doc__ or f"{method_name} skill"
             skills.append(
-                AgentSkill(
+                AgentSkillCard(
                     id=skill_id,
                     name=method_name.replace("_", " ").title(),
                     description=doc.strip(),
@@ -469,10 +470,18 @@ class AgentWrapper:
             description=self.description,
             url=discovery_url,
             version=self.version,
+            provider=AgentProvider(
+                organization="AgentWrapper",
+                url=discovery_url
+            ),
             skills=self._build_skills(),
+            services=[
+                AgentService(name="A2A", endpoint=f"{discovery_url}/.well-known/agent-card.json", a2aSkills=[s.name for s in self._build_skills()]),
+                AgentService(name="web", endpoint=discovery_url)
+            ],
             capabilities=AgentCapabilities(),
-            default_input_modes=["text/plain", "application/json"],
-            default_output_modes=["text/plain", "application/json"],
+            defaultInputModes=["text/plain", "application/json"],
+            defaultOutputModes=["text/plain", "application/json"],
             metadata=self.metadata,
         )
 

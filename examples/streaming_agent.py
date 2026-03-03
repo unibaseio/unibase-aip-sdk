@@ -5,6 +5,7 @@ Demonstrates how to use raw streaming response with user_id injection and ag_ui 
 """
 from openai import AsyncOpenAI
 from typing import AsyncIterator
+from aip_sdk.types import AgentSkillCard
 
 from aip_sdk import expose_as_a2a
 from ag_ui.core import TextMessageContentEvent, EventType, UserMessage, TextInputContent
@@ -61,6 +62,14 @@ def main():
         streaming=True,
         raw_response=True, # Enable raw response support
         description="Agent with raw streaming response and ag_ui",
+        skills=[
+            AgentSkillCard(
+                id="story.teller",
+                name="Story Teller",
+                description="Generates long stories with streaming response",
+                tags=["creative", "story", "streaming"],
+            )
+        ],
     )
     
     server.run_sync()

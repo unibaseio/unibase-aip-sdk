@@ -1,14 +1,11 @@
-"""Agent Card generation from AgentIdentity."""
-
 from typing import Optional, List, Dict, Any
 
-# Import directly from Google A2A SDK
-from a2a.types import (
+from aip_sdk.types import (
     AgentCard,
-    AgentSkill,
+    AgentSkillCard,
     AgentCapabilities,
     AgentProvider,
-    AgentInterface,
+    AgentService
 )
 
 from ..core.types import AgentIdentity
@@ -47,16 +44,16 @@ def generate_agent_card(
         # Check if identity has skill metadata
         if identity.metadata.get("skills"):
             for skill_data in identity.metadata["skills"]:
-                skills.append(AgentSkill(
+                skills.append(AgentSkillCard(
                     id=skill_data.get("id", f"{identity.name.lower()}-skill"),
                     name=skill_data.get("name", identity.name),
                     description=skill_data.get("description", description),
                     tags=skill_data.get("tags", []),
-                    examples=skill_data.get("examples"),
+                    examples=skill_data.get("examples", []),
                 ))
         else:
             # Create a default skill
-            skills.append(AgentSkill(
+            skills.append(AgentSkillCard(
                 id=f"{identity.agent_id}-default",
                 name=identity.name,
                 description=description,
@@ -72,8 +69,12 @@ def generate_agent_card(
         capabilities=capabilities,
         skills=skills,
         provider=provider,
-        default_input_modes=["text/plain", "application/json"],
-        default_output_modes=["text/plain", "application/json"],
+        services=[
+            AgentService(name="A2A", endpoint=f"{base_url}/.well-known/agent-card.json", a2aSkills=[s.name for s in skills]),
+            AgentService(name="web", endpoint=base_url)
+        ],
+        defaultInputModes=["text/plain", "application/json"],
+        defaultOutputModes=["text/plain", "application/json"],
     )
 
     return card
@@ -86,12 +87,12 @@ def agent_card_from_metadata(
     """Generate an Agent Card from raw metadata dictionary."""
     skills = []
     for skill_data in metadata.get("skills", []):
-        skills.append(AgentSkill(
-            id=skill_data["id"],
-            name=skill_data["name"],
-            description=skill_data["description"],
+        skills.append(AgentSkillCard(
+            id=skill_data.get("id", f"{metadata.get('name', 'agent')}_skill"),
+            name=skill_data.get("name", "skill"),
+            description=skill_data.get("description", ""),
             tags=skill_data.get("tags", []),
-            examples=skill_data.get("examples"),
+            examples=skill_data.get("examples", []),
         ))
 
     capabilities = AgentCapabilities(
@@ -103,18 +104,22 @@ def agent_card_from_metadata(
     provider = None
     if metadata.get("provider"):
         provider = AgentProvider(
-            organization=metadata["provider"]["organization"],
+            organization=metadata["provider"].get("organization", "BitAgent"),
             url=metadata["provider"].get("url")
         )
 
     return AgentCard(
-        name=metadata["name"],
-        description=metadata.get("description", f"AI agent: {metadata['name']}"),
+        name=metadata.get("name", "agent"),
+        description=metadata.get("description", f"AI agent: {metadata.get('name', 'agent')}"),
         url=base_url,
         version=metadata.get("version", "1.0.0"),
         capabilities=capabilities,
         skills=skills,
         provider=provider,
-        default_input_modes=["text/plain", "application/json"],
-        default_output_modes=["text/plain", "application/json"],
+        services=[
+            AgentService(name="A2A", endpoint=f"{base_url}/.well-known/agent-card.json", a2aSkills=[s.name for s in skills]),
+            AgentService(name="web", endpoint=base_url)
+        ],
+        defaultInputModes=["text/plain", "application/json"],
+        defaultOutputModes=["text/plain", "application/json"],
     )

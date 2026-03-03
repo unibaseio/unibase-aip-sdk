@@ -26,7 +26,7 @@ from typing import Dict, List
 from aip_sdk import AsyncAIPClient, AgentConfig, SkillConfig, CostModel
 from aip_sdk import expose_as_a2a
 from aip_sdk.a2a import AgentMessage
-from a2a.types import AgentSkill
+from aip_sdk.types import AgentSkillCard
 
 
 # ============================================================================
@@ -291,7 +291,7 @@ def start_agent_service(user_wallet: str, agent_id: str):
 
     # Define skills (consistent with registration)
     skills = [
-        AgentSkill(
+        AgentSkillCard(
             id="calculator.compute",
             name="Mathematical Computation",
             description="Perform mathematical calculations",

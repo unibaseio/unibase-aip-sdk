@@ -10,7 +10,8 @@ from typing import (
     Union,
 )
 
-from a2a.types import Task, Message, AgentCard
+from a2a.types import Task, Message
+from aip_sdk.types import AgentCard
 
 from aip_sdk.agent.context import AIPContext
 from aip_sdk.exceptions import AgentNotFoundError

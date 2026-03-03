@@ -8,8 +8,10 @@ as A2A-compatible services.
 import asyncio
 from typing import Any, Optional, List
 
-from a2a.types import AgentCard, AgentSkill, AgentCapabilities, Task, Message, Role
+from a2a.types import Task, Message, Role
 from a2a.client.helpers import create_text_message_object
+
+from aip_sdk.types import AgentCard, AgentSkillCard, AgentCapabilities, AgentProvider, AgentService
 
 from ..a2a.server import A2AServer
 from ..a2a.types import StreamResponse, AgentMessage
@@ -40,7 +42,7 @@ class LangGraphWrapper:
         input_key: str = "message",
         output_key: str = "output",
         description: str = None,
-        skills: List[AgentSkill] = None,
+        skills: List[AgentSkillCard] = None,
         version: str = "1.0.0",
     ):
         """
@@ -66,7 +68,7 @@ class LangGraphWrapper:
         if skills is None:
             skill_id = name.lower().replace(" ", "_")
             self.skills = [
-                AgentSkill(
+                AgentSkillCard(
                     id=skill_id,
                     name=name,
                     description=self.description,
@@ -162,10 +164,18 @@ class LangGraphWrapper:
             description=self.description,
             url=discovery_url,
             version=self.version,
+            provider=AgentProvider(
+                organization="LangGraphWrapper",
+                url=discovery_url
+            ),
             skills=self.skills,
             capabilities=AgentCapabilities(streaming=True),
-            default_input_modes=["text/plain", "application/json"],
-            default_output_modes=["text/plain", "application/json"],
+            services=[
+                AgentService(name="A2A", endpoint=f"{discovery_url}/.well-known/agent-card.json", a2aSkills=[s.name for s in self.skills]),
+                AgentService(name="web", endpoint=discovery_url)
+            ],
+            defaultInputModes=["text/plain", "application/json"],
+            defaultOutputModes=["text/plain", "application/json"],
         )
 
         # Build registration config
@@ -217,7 +227,7 @@ def expose_langgraph_as_a2a(
     input_key: str = "message",
     output_key: str = "output",
     description: str = None,
-    skills: List[AgentSkill] = None,
+    skills: List[AgentSkillCard] = None,
     version: str = "1.0.0",
     cost_model: Any = None,
     user_id: str = None,

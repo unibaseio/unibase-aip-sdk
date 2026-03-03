@@ -8,14 +8,10 @@ import httpx
 
 from a2a.types import (
     Task,
-    TaskState,
-    TaskStatus,
     Message,
-    Role,
-    AgentCard,
     TaskStatusUpdateEvent,
-    JSONRPCRequest,
 )
+from aip_sdk.types import AgentCard
 
 from aip_sdk.gateway.interface import A2AClientInterface
 from aip_sdk.agent.context import AIPContext, wrap_message

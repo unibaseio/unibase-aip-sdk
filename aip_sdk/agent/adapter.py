@@ -13,14 +13,22 @@ from a2a.types import (
     TaskStatusUpdateEvent,
     Artifact,
     TextPart,
-    AgentCard,
-    AgentSkill,
-    AgentProvider,
     Role,
 )
 from a2a.utils.message import get_message_text
 
-from aip_sdk.types import Task as SDKTask, TaskResult, AgentContext, AgentMessage, MessageContext
+from aip_sdk.types import (
+    Task as SDKTask,
+    TaskResult,
+    AgentContext,
+    AgentMessage,
+    MessageContext,
+    AgentCard,
+    AgentSkillCard,
+    AgentCapabilities,
+    AgentProvider,
+    AgentService
+)
 from aip_sdk.messaging import MessageHelpers, AIPMetadata
 
 if TYPE_CHECKING:
@@ -96,73 +104,48 @@ def agent_config_to_card(
     endpoint_url: Optional[str] = None,
 ) -> AgentCard:
     """Convert an AgentConfig to an A2A AgentCard."""
+    # Build URL
+    url = endpoint_url or f"http://localhost/{agent_id}"
+    a2a_endpoint = f"{url.rstrip('/')}/.well-known/agent-card.json"
+    
     # Build skills list
     skills = []
     if hasattr(config, "skills"):
         for skill in config.skills:
-            # Build input/output schema from SkillConfig
-            input_schema = {}
-            output_schema = {}
-
-            if hasattr(skill, "inputs"):
-                properties = {}
-                required = []
-                for inp in skill.inputs:
-                    properties[inp.name] = {
-                        "type": inp.field_type,
-                        "description": inp.description,
-                    }
-                    if inp.required:
-                        required.append(inp.name)
-                input_schema = {
-                    "type": "object",
-                    "properties": properties,
-                    "required": required,
-                }
-
-            if hasattr(skill, "outputs"):
-                properties = {}
-                for out in skill.outputs:
-                    properties[out.name] = {
-                        "type": out.field_type,
-                        "description": out.description,
-                    }
-                output_schema = {
-                    "type": "object",
-                    "properties": properties,
-                }
-
             skills.append(
-                Skill(
+                AgentSkillCard(
                     id=skill.name.lower().replace(" ", "_"),
                     name=skill.name,
                     description=skill.description,
-                    input_modes=["text", "text/plain", "application/json"],
-                    output_modes=["text", "text/plain", "application/json"],
+                    inputModes=["text/plain", "application/json"],
+                    outputModes=["text/plain", "application/json"],
                 )
             )
 
     # Build capabilities list
-    capabilities = []
-    if hasattr(config, "capabilities"):
-        # Simple string capabilities
-        capabilities = config.capabilities
-
-    # Build URL
-    url = endpoint_url or f"local://{agent_id}"
+    capabilities = AgentCapabilities(
+        streaming=True,
+        pushNotifications=False,
+        stateTransitionHistory=True
+    )
 
     return AgentCard(
         name=config.name if hasattr(config, "name") else agent_id,
         description=config.description if hasattr(config, "description") else "",
         url=url,
         version="1.0.0",
-        provider=Provider(
+        provider=AgentProvider(
             organization="AIP",
             url="https://aip.local",
         ),
         skills=skills,
-        default_input_modes=["text", "application/json"],
-        default_output_modes=["text", "application/json"],
+        capabilities=capabilities,
+        services=[
+            AgentService(name="A2A", endpoint=a2a_endpoint, a2aSkills=[s.name for s in skills]),
+            AgentService(name="web", endpoint=url)
+        ],
+        defaultInputModes=["text/plain", "application/json"],
+        defaultOutputModes=["text/plain", "application/json"],
     )
 
 
@@ -197,9 +180,9 @@ class A2AAgentAdapter:
         else:
             # Minimal card for agents without config
             self._agent_card = AgentCard(
-                name=agent.agent_id,
+                name=agent.agent_id if hasattr(agent, "agent_id") else "agent",
                 description="",
-                url=endpoint_url or f"local://{agent.agent_id}",
+                url=endpoint_url or f"http://localhost/{getattr(agent, 'agent_id', 'agent')}",
                 version="1.0.0",
             )
 

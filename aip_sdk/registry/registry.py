@@ -25,7 +25,8 @@ class RegistrationMode(Enum):
     GATEWAY = "gateway"  # Register through a gateway (for agents behind firewalls/NAT)
 
 # Import A2A types directly from Google A2A SDK
-from a2a.types import AgentCard, AgentSkill, Task, Message
+from a2a.types import Task, Message
+from aip_sdk.types import AgentCard, AgentSkillCard
 
 # Import Unibase A2A extensions
 from ..a2a.types import StreamResponse

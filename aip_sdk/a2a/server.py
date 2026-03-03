@@ -14,9 +14,7 @@ from ..utils.config import get_default_aip_endpoint
 
 logger = get_logger("a2a.server")
 
-# Import directly from Google A2A SDK
 from a2a.types import (
-    AgentCard,
     Task,
     TaskState,
     TaskStatus,
@@ -24,6 +22,7 @@ from a2a.types import (
     TextPart,
     Role,
 )
+from aip_sdk.types import AgentCard
 from a2a.utils.message import get_message_text
 from a2a.client.helpers import create_text_message_object
 
