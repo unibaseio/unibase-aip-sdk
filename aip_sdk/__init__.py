@@ -129,4 +129,44 @@ __all__ = [
     "ValidationError",
     "TimeoutError",
     "AgentNotFoundError",
+    
+    # --- Agent SDK Merged Exports ---
+    "AgentType",
+    "AgentIdentity",
+    "expose_as_a2a",
+    "wrap_agent",
+    "AgentWrapper",
+    "expose_langgraph_as_a2a",
+    "LangGraphWrapper",
+    "expose_adk_as_a2a",
+    "ADKWrapper",
+    "A2AServer",
+    "StreamResponse",
+    "A2AClient",
+    "AgentRegistry",
+    "RegistrationMode",
 ]
+
+# Core types
+from aip_sdk.core.types import (
+    AgentType,
+    AgentIdentity,
+)
+
+# Generic Wrappers (wrap ANY agent as A2A service)
+from aip_sdk.wrappers import (
+    expose_as_a2a,
+    wrap_agent,
+    AgentWrapper,
+    # Framework-specific wrappers
+    expose_langgraph_as_a2a,
+    LangGraphWrapper,
+    expose_adk_as_a2a,
+    ADKWrapper,
+)
+
+# A2A Server and extensions
+from aip_sdk.a2a import A2AServer, StreamResponse, A2AClient
+
+# Registry (AIP platform integration)
+from aip_sdk.registry import AgentRegistryClient as AgentRegistry, RegistrationMode

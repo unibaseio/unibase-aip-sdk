@@ -118,6 +118,91 @@ class CostModel(BaseModel):
         return cls.model_validate(data)
 
 
+class AgentService(BaseModel):
+    """A service endpoint defined in an Agent Card."""
+    name: str
+    endpoint: str
+    version: Optional[str] = "1.0.0"
+    a2aSkills: Optional[List[str]] = None
+
+class AgentRegistration(BaseModel):
+    """On-chain registration reference for an Agent Card."""
+    agentId: str
+    agentRegistry: str
+
+class AgentProvider(BaseModel):
+    """Information about the entity providing/hosting the agent."""
+    organization: str
+    url: Optional[str] = None
+
+class AgentCapabilities(BaseModel):
+    """Capabilities supported by the agent."""
+    streaming: bool = False
+    pushNotifications: bool = False
+    stateTransitionHistory: bool = False
+
+class AgentAuthentication(BaseModel):
+    """Authentication required to access the agent."""
+    schemes: List[str] = ["Bearer"]
+    credentials: Optional[str] = None
+
+class AgentSkillCard(BaseModel):
+    """A skill definition as represented in an Agent Card."""
+    id: str
+    name: str
+    description: str
+    tags: List[str] = Field(default_factory=list)
+    examples: List[str] = Field(default_factory=list)
+    inputModes: List[str] = Field(default=["text/plain"])
+    outputModes: List[str] = Field(default=["application/json"])
+
+class AgentCard(BaseModel):
+    """
+    Standard Agent Card strictly following the ERC-8004 specification.
+    This serves as the single source of truth across SDK, Registry, Gateway, and API.
+    """
+    # ERC-8004 standard type identifier
+    type: str = Field(default="https://eips.ethereum.org/EIPS/eip-8004#registration-v1", alias="type")
+    
+    # Core Metadata
+    name: str
+    description: str
+    url: str  # The primary endpoint of the agent
+    
+    # Optional Assets
+    image: Optional[str] = None
+    iconUrl: Optional[str] = None
+    
+    # Status
+    x402support: bool = True
+    active: bool = True
+    version: str = "1.0.0"
+    
+    # Lists
+    services: List[AgentService] = Field(default_factory=list)
+    registrations: List[AgentRegistration] = Field(default_factory=list)
+    supportedTrust: List[str] = Field(default_factory=lambda: ["reputation", "crypto-economic", "tee-attestation"])
+    
+    # Additional Context
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    userInterface: Optional[str] = None
+    FeedbackDataURI: Optional[str] = None
+    provider: Optional[AgentProvider] = None
+    documentationUrl: Optional[str] = None
+    capabilities: AgentCapabilities = Field(default_factory=AgentCapabilities)
+    authentication: AgentAuthentication = Field(default_factory=AgentAuthentication)
+    
+    # I/O Modes
+    defaultInputModes: List[str] = Field(default_factory=lambda: ["text/plain"])
+    defaultOutputModes: List[str] = Field(default_factory=lambda: ["application/json"])
+    
+    # Agent Capabilities
+    skills: List[AgentSkillCard] = Field(default_factory=list)
+    trustModels: List[str] = Field(default_factory=lambda: ["feedback", "inference-validation", "tee-attestation"])
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class AgentConfig(BaseModel):
     """Configuration for an agent."""
 
@@ -136,17 +221,52 @@ class AgentConfig(BaseModel):
         """Get the primary price (base_call_fee from cost_model)."""
         return self.cost_model.base_call_fee or 0.001
 
+    def to_agent_card(self, agent_id: str = "0", registry_address: str = "") -> AgentCard:
+        """Synthesize an ERC-8004 AgentCard out of the config."""
+        
+        handle = self.handle or self.name.lower().replace(" ", "_")
+        
+        # Primary endpoint
+        url = self.endpoint_url or f"http://localhost:8000/agents/{handle}/"
+        a2a_endpoint = f"{url.rstrip('/')}/.well-known/agent-card.json"
+        
+        skill_cards = [
+            AgentSkillCard(
+                id=f"{handle}_{s.name}",
+                name=s.name,
+                description=s.description,
+                tags=self.capabilities,
+                examples=[],
+                inputModes=["text/plain"],
+                outputModes=["application/json"]
+            )
+            for s in self.skills
+        ]
+
+        # Use defaults for absent details
+        return AgentCard(
+            name=self.name,
+            description=self.description,
+            url=url,
+            services=[
+                AgentService(name="A2A", endpoint=a2a_endpoint, a2aSkills=[s.name for s in self.skills]),
+                AgentService(name="web", endpoint=url)
+            ],
+            registrations=[
+                AgentRegistration(agentId=agent_id, agentRegistry=registry_address)
+            ] if registry_address else [],
+            skills=skill_cards,
+            metadata=self.metadata,
+            provider=AgentProvider(organization="BitAgent", url="https://bitagent.io"),
+        )
+
     def to_registration_dict(self) -> Dict[str, Any]:
         """Convert to registration API format."""
         handle = self.handle or self.name.lower().replace(" ", "_")
 
         return {
             "handle": handle,
-            "card": {
-                "name": self.name,
-                "description": self.description,
-                "capabilities": self.capabilities,
-            },
+            "card": self.to_agent_card().model_dump(by_alias=True, exclude_none=True),
             "skills": [s.to_dict() for s in self.skills],
             "tasks": [
                 {"name": s.name, "description": s.description} for s in self.skills
