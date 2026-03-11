@@ -12,7 +12,7 @@ Features:
 - Automatic Membase conversation memory
 
 Environment Variables:
-- AIP_ENDPOINT=http://api.aip.unibase.com
+- AIP_ENDPOINT=https://api.aip.unibase.com
 - MEMBASE_ACCOUNT=0x5ea13664c5ce67753f208540d25b913788aa3daa (test account)
 - MEMBASE_SECRET_KEY=<contact us for test account credentials>
 """
@@ -41,7 +41,7 @@ async def call_weather_agent():
     print("Example 1: Calling Public Weather Agent")
     print("="*70)
 
-    aip_endpoint = os.environ.get("AIP_ENDPOINT", "http://api.aip.unibase.com")
+    aip_endpoint = os.environ.get("AIP_ENDPOINT", "https://api.aip.unibase.com")
     user_wallet = os.environ.get("MEMBASE_ACCOUNT", "0x5ea13664c5ce67753f208540d25b913788aa3daa")
     user_id = f"user:0x5eA13664c5ce67753f208540d25B913788Aa3DaA"
 
@@ -72,7 +72,7 @@ async def call_calculator_agent():
     print("Example 2: Calling Private Calculator Agent")
     print("="*70)
 
-    aip_endpoint = os.environ.get("AIP_ENDPOINT", "http://api.aip.unibase.com")
+    aip_endpoint = os.environ.get("AIP_ENDPOINT", "https://api.aip.unibase.com")
     user_id = f"user:0x5eA13664c5ce67753f208540d25B913788Aa3DaA"
 
     async with AsyncAIPClient(base_url=aip_endpoint) as client:
@@ -102,7 +102,7 @@ async def stream_agent_events():
     print("Example 3: Streaming Events from Calculator Agent")
     print("="*70)
 
-    aip_endpoint = os.environ.get("AIP_ENDPOINT", "http://api.aip.unibase.com")
+    aip_endpoint = os.environ.get("AIP_ENDPOINT", "https://api.aip.unibase.com")
     user_id = f"user:0x5eA13664c5ce67753f208540d25B913788Aa3DaA"
 
     async with AsyncAIPClient(base_url=aip_endpoint) as client:
@@ -151,7 +151,7 @@ async def auto_route_request():
     print("Example 4: Auto-routing to Best Agent")
     print("="*70)
 
-    aip_endpoint = os.environ.get("AIP_ENDPOINT", "http://api.aip.unibase.com")
+    aip_endpoint = os.environ.get("AIP_ENDPOINT", "https://api.aip.unibase.com")
     user_id = f"user:0x5eA13664c5ce67753f208540d25B913788Aa3DaA"
 
     async with AsyncAIPClient(base_url=aip_endpoint) as client:
@@ -196,7 +196,7 @@ async def main():
     print("  • Auto-routing to best agent")
 
     # Check platform health
-    aip_endpoint = os.environ.get("AIP_ENDPOINT", "http://api.aip.unibase.com")
+    aip_endpoint = os.environ.get("AIP_ENDPOINT", "https://api.aip.unibase.com")
     async with AsyncAIPClient(base_url=aip_endpoint) as client:
         is_healthy = await client.health_check()
         if not is_healthy:

@@ -14,4 +14,4 @@ def get_default_aip_endpoint() -> str:
         config = get_config()
         return config.aip.public_url
     except Exception:
-        return "http://api.aip.unibase.com"
+        return "https://api.aip.unibase.com"
