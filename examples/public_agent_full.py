@@ -10,7 +10,7 @@ This example demonstrates how to create a publicly accessible agent:
 5. Route via Gateway (DIRECT mode)
 
 Environment Variables (configured in .env):
-- AIP_ENDPOINT=http://api.aip.unibase.com
+- AIP_ENDPOINT=https://api.aip.unibase.com
 - GATEWAY_URL=http://gateway.aip.unibase.com
 - MEMBASE_ACCOUNT=0x5ea13664c5ce67753f208540d25b913788aa3daa (test account)
 """
@@ -140,7 +140,7 @@ async def register_agent_to_platform(user_wallet: str) -> str:
     print("="*70)
 
     # Get AIP endpoint
-    aip_endpoint = os.environ.get("AIP_ENDPOINT", "http://api.aip.unibase.com")
+    aip_endpoint = os.environ.get("AIP_ENDPOINT", "https://api.aip.unibase.com")
     print(f"AIP Endpoint: {aip_endpoint}")
 
     async with AsyncAIPClient(base_url=aip_endpoint) as client:
@@ -238,7 +238,7 @@ def start_agent_service(user_wallet: str, agent_id: str):
     weather_agent = WeatherAgent()
 
     # Get configuration
-    aip_endpoint = os.environ.get("AIP_ENDPOINT", "http://api.aip.unibase.com")
+    aip_endpoint = os.environ.get("AIP_ENDPOINT", "https://api.aip.unibase.com")
     gateway_url = os.environ.get("GATEWAY_URL", "http://gateway.aip.unibase.com")
     agent_host = os.environ.get("AGENT_HOST", "0.0.0.0")
     agent_port = int(os.environ.get("AGENT_PORT", "8200"))

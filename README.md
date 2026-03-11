@@ -67,7 +67,7 @@ Configure these environment variables before running examples:
 
 ```bash
 # AIP Platform endpoint
-export AIP_ENDPOINT="http://api.aip.unibase.com"
+export AIP_ENDPOINT="https://api.aip.unibase.com"
 
 # For local development, use:
 # export AIP_ENDPOINT="http://localhost:8001"
@@ -119,7 +119,7 @@ Create an `AsyncAIPClient` instance connected to the AIP platform:
 ```python
 from aip_sdk import AsyncAIPClient
 
-async with AsyncAIPClient(base_url="http://api.aip.unibase.com") as client:
+async with AsyncAIPClient(base_url="https://api.aip.unibase.com") as client:
     # Client is ready to use
     pass
 ```
@@ -274,7 +274,7 @@ from aip_sdk import AsyncAIPClient
 
 ```python
 async def call_agent_example():
-    aip_endpoint = "http://api.aip.unibase.com"
+    aip_endpoint = "https://api.aip.unibase.com"
     user_id = "user:0x5eA13664c5ce67753f208540d25B913788Aa3DaA"
 
     async with AsyncAIPClient(base_url=aip_endpoint) as client:
@@ -393,7 +393,7 @@ from aip_sdk import AsyncAIPClient
 
 async def main():
     # Configuration
-    aip_endpoint = os.environ.get("AIP_ENDPOINT", "http://api.aip.unibase.com")
+    aip_endpoint = os.environ.get("AIP_ENDPOINT", "https://api.aip.unibase.com")
     user_id = "user:0x5eA13664c5ce67753f208540d25B913788Aa3DaA"
 
     async with AsyncAIPClient(base_url=aip_endpoint) as client:
@@ -455,7 +455,7 @@ cd packages/unibase-aip-sdk
 uv pip install -e .
 
 # Set environment
-export AIP_ENDPOINT="http://api.aip.unibase.com"
+export AIP_ENDPOINT="https://api.aip.unibase.com"
 export MEMBASE_ACCOUNT="0x5ea13664c5ce67753f208540d25b913788aa3daa"
 export MEMBASE_SECRET_KEY="<contact us for credentials>"
 
