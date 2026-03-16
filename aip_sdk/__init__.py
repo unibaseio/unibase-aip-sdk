@@ -29,6 +29,10 @@ from aip_sdk.agent import (
     ExternalAgentClient,
 )
 
+# Commerce
+from aip_sdk.commerce.client import MissionClient
+from aip_sdk.commerce.evaluator import SchemaEvaluator
+
 # Types
 from aip_sdk.types import (
     Task,
@@ -145,6 +149,8 @@ __all__ = [
     "A2AClient",
     "AgentRegistry",
     "RegistrationMode",
+    "MissionClient",
+    "SchemaEvaluator",
 ]
 
 # Core types

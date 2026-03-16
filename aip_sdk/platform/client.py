@@ -501,6 +501,86 @@ class AsyncAIPClient:
         response = await self.client.get(f"/runs/{run_id}/payments")
         response.raise_for_status()
         return response.json()
+
+    # --- Commerce/Mission Methods ---
+
+    async def create_mission(
+        self,
+        client_id: str,
+        description: str,
+        reward_amount: float,
+        reward_token: str,
+        evaluator_id: str,
+        expires_in: int = 86400,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Create a new agentic mission."""
+        payload = {
+            "description": description,
+            "reward_amount": reward_amount,
+            "reward_token": reward_token,
+            "evaluator_id": evaluator_id,
+            "expires_in": expires_in,
+            "metadata": metadata or {},
+        }
+        response = await self.client.post(
+            f"/v1/missions?client_id={client_id}",
+            json=payload,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def accept_mission(self, mission_id: str, provider_id: str) -> Dict[str, Any]:
+        """Accept a mission."""
+        response = await self.client.post(
+            f"/v1/missions/{mission_id}/accept?provider_id={provider_id}"
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def submit_mission_work(
+        self,
+        mission_id: str,
+        provider_id: str,
+        deliverable_data: Any,
+        description: str = "",
+    ) -> Dict[str, Any]:
+        """Submit work for a mission."""
+        payload = {
+            "provider_id": provider_id,
+            "deliverable_data": deliverable_data,
+            "description": description,
+        }
+        response = await self.client.post(
+            f"/v1/missions/{mission_id}/submit",
+            json=payload,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def complete_mission(
+        self,
+        mission_id: str,
+        evaluator_id: str,
+        reason: str = "",
+    ) -> Dict[str, Any]:
+        """Complete a mission (as evaluator)."""
+        payload = {
+            "evaluator_id": evaluator_id,
+            "reason": reason,
+        }
+        response = await self.client.post(
+            f"/v1/missions/{mission_id}/complete",
+            json=payload,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def get_mission(self, mission_id: str) -> Dict[str, Any]:
+        """Get mission details."""
+        response = await self.client.get(f"/v1/missions/{mission_id}")
+        response.raise_for_status()
+        return response.json()
     
 class AIPClient:
     """Synchronous wrapper around AsyncAIPClient."""
