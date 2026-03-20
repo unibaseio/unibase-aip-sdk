@@ -30,7 +30,7 @@ from aip_sdk.agent import (
 )
 
 # Commerce
-from aip_sdk.commerce.client import MissionClient
+from aip_sdk.commerce.client import JobClient
 from aip_sdk.commerce.evaluator import SchemaEvaluator
 
 # Types
@@ -149,7 +149,7 @@ __all__ = [
     "A2AClient",
     "AgentRegistry",
     "RegistrationMode",
-    "MissionClient",
+    "JobClient",
     "SchemaEvaluator",
 ]
 

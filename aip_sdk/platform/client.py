@@ -502,9 +502,9 @@ class AsyncAIPClient:
         response.raise_for_status()
         return response.json()
 
-    # --- Commerce/Mission Methods ---
+    # --- Commerce/Job Methods ---
 
-    async def create_mission(
+    async def create_job(
         self,
         client_id: str,
         description: str,
@@ -514,7 +514,7 @@ class AsyncAIPClient:
         expires_in: int = 86400,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Create a new agentic mission."""
+        """Create a new agentic job."""
         payload = {
             "description": description,
             "reward_amount": reward_amount,
@@ -524,61 +524,61 @@ class AsyncAIPClient:
             "metadata": metadata or {},
         }
         response = await self.client.post(
-            f"/v1/missions?client_id={client_id}",
+            f"/v1/jobs?client_id={client_id}",
             json=payload,
         )
         response.raise_for_status()
         return response.json()
 
-    async def accept_mission(self, mission_id: str, provider_id: str) -> Dict[str, Any]:
-        """Accept a mission."""
+    async def accept_job(self, job_id: str, provider_id: str) -> Dict[str, Any]:
+        """Accept a job."""
         response = await self.client.post(
-            f"/v1/missions/{mission_id}/accept?provider_id={provider_id}"
+            f"/v1/jobs/{job_id}/accept?provider_id={provider_id}"
         )
         response.raise_for_status()
         return response.json()
 
-    async def submit_mission_work(
+    async def submit_job_work(
         self,
-        mission_id: str,
+        job_id: str,
         provider_id: str,
         deliverable_data: Any,
         description: str = "",
     ) -> Dict[str, Any]:
-        """Submit work for a mission."""
+        """Submit work for a job."""
         payload = {
             "provider_id": provider_id,
             "deliverable_data": deliverable_data,
             "description": description,
         }
         response = await self.client.post(
-            f"/v1/missions/{mission_id}/submit",
+            f"/v1/jobs/{job_id}/submit",
             json=payload,
         )
         response.raise_for_status()
         return response.json()
 
-    async def complete_mission(
+    async def complete_job(
         self,
-        mission_id: str,
+        job_id: str,
         evaluator_id: str,
         reason: str = "",
     ) -> Dict[str, Any]:
-        """Complete a mission (as evaluator)."""
+        """Complete a job (as evaluator)."""
         payload = {
             "evaluator_id": evaluator_id,
             "reason": reason,
         }
         response = await self.client.post(
-            f"/v1/missions/{mission_id}/complete",
+            f"/v1/jobs/{job_id}/complete",
             json=payload,
         )
         response.raise_for_status()
         return response.json()
 
-    async def get_mission(self, mission_id: str) -> Dict[str, Any]:
-        """Get mission details."""
-        response = await self.client.get(f"/v1/missions/{mission_id}")
+    async def get_job(self, job_id: str) -> Dict[str, Any]:
+        """Get job details."""
+        response = await self.client.get(f"/v1/jobs/{job_id}")
         response.raise_for_status()
         return response.json()
     
@@ -751,3 +751,25 @@ class AIPClient:
     def get_run_payments(self, run_id: str) -> List[Dict[str, Any]]:
         """Get payments for a specific run."""
         return self._run(self._async_client.get_run_payments(run_id))
+
+    # --- Commerce/Job Methods ---
+
+    def create_job(self, **kwargs) -> Dict[str, Any]:
+        """Create a new job."""
+        return self._run(self._async_client.create_job(**kwargs))
+
+    def accept_job(self, job_id: str, provider_id: str) -> Dict[str, Any]:
+        """Accept a job."""
+        return self._run(self._async_client.accept_job(job_id, provider_id))
+
+    def submit_job_work(self, **kwargs) -> Dict[str, Any]:
+        """Submit work for a job."""
+        return self._run(self._async_client.submit_job_work(**kwargs))
+
+    def complete_job(self, **kwargs) -> Dict[str, Any]:
+        """Complete a job."""
+        return self._run(self._async_client.complete_job(**kwargs))
+
+    def get_job(self, job_id: str) -> Dict[str, Any]:
+        """Get job details."""
+        return self._run(self._async_client.get_job(job_id))
