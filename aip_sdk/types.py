@@ -413,13 +413,20 @@ class AgentContext:
             reason=reason,
         )
 
-    def log(self, event_type: str, **data: Any) -> None:
+    async def log(self, event_type: str, **data: Any) -> None:
         """Log an event."""
-        self.emit_event({"type": event_type, **data})
+        import inspect
+        res = self.emit_event({"type": event_type, **data})
+        if inspect.isawaitable(res):
+            await res
 
     async def read(self, scope: str) -> Dict[str, Any]:
         """Read from agent memory."""
-        return self.memory_read(scope)
+        import inspect
+        res = self.memory_read(scope)
+        if inspect.isawaitable(res):
+            return await res
+        return res
 
     async def write(
         self,
@@ -428,7 +435,10 @@ class AgentContext:
         description: str = "",
     ) -> None:
         """Write to agent memory."""
-        self.memory_write(scope, data, description)
+        import inspect
+        res = self.memory_write(scope, data, description)
+        if inspect.isawaitable(res):
+            await res
 
     @classmethod
     def from_execution_context(cls, ctx: Any) -> AgentContext:
