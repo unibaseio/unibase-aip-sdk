@@ -15,9 +15,14 @@ class JobClient:
         reward_token: str,
         evaluator_id: str,
         expires_in: int = 86400,
+        chain_id: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Create a new job."""
+        metadata = metadata or {}
+        if chain_id:
+            metadata["chain_id"] = chain_id
+
         return await self.aip.create_job(
             client_id=client_id,
             description=description,
@@ -28,9 +33,9 @@ class JobClient:
             metadata=metadata
         )
 
-    async def accept(self, job_id: str, provider_id: str) -> bool:
+    async def accept(self, job_id: str, provider_id: str, chain_id: Optional[int] = None) -> bool:
         """Accept a job. Returns True if successful."""
-        result = await self.aip.accept_job(job_id, provider_id)
+        result = await self.aip.accept_job(job_id, provider_id, chain_id=chain_id)
         return result.get("status") == "accepted"
 
     async def submit(
@@ -39,13 +44,15 @@ class JobClient:
         provider_id: str,
         deliverable_data: Any,
         description: str = "",
+        chain_id: Optional[int] = None,
     ) -> bool:
         """Submit work for a job. Returns True if successful."""
         result = await self.aip.submit_job_work(
             job_id=job_id,
             provider_id=provider_id,
             deliverable_data=deliverable_data,
-            description=description
+            description=description,
+            chain_id=chain_id
         )
         return result.get("status") == "submitted"
 
@@ -54,15 +61,17 @@ class JobClient:
         job_id: str,
         evaluator_id: str,
         reason: str = "",
+        chain_id: Optional[int] = None,
     ) -> bool:
         """Complete a job (as evaluator). Returns True if successful."""
         result = await self.aip.complete_job(
             job_id=job_id,
             evaluator_id=evaluator_id,
-            reason=reason
+            reason=reason,
+            chain_id=chain_id
         )
         return result.get("status") == "completed"
 
-    async def get(self, job_id: str) -> Dict[str, Any]:
+    async def get(self, job_id: str, chain_id: Optional[int] = None) -> Dict[str, Any]:
         """Get job list and current status."""
-        return await self.aip.get_job(job_id)
+        return await self.aip.get_job(job_id, chain_id=chain_id)
