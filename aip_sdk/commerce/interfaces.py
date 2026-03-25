@@ -7,12 +7,14 @@ from typing import Any, Dict, List, Optional
 
 class JobStatus(str, Enum):
     OPEN = "open"
+    FUNDED = "funded"
     ACCEPTED = "accepted"
     SUBMITTED = "submitted"
     COMPLETED = "completed"
     REJECTED = "rejected"
     EXPIRED = "expired"
     REFUNDED = "refunded"
+    DISPUTED = "disputed"
 
 
 @dataclass
