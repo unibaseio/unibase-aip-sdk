@@ -1,6 +1,5 @@
-"""A2A Protocol type extensions for Unibase Agent SDK."""
-
-from typing import Optional, Union
+from typing import Optional, Union, List, Dict, Any
+from pydantic import BaseModel, Field
 
 from a2a.types import (
     Task,
@@ -17,6 +16,34 @@ from aip_sdk.types import (
     RoutingHints,
     AgentResponse,
 )
+
+
+class InvokeRequest(BaseModel):
+    """Request format for invoking an agent."""
+    message: str = Field(..., description="User intent (text or JSON)")
+    context: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional context (conversation_id, metadata)"
+    )
+    domain_hint: Optional[str] = Field(
+        default=None,
+        description="Optional hint for routing"
+    )
+    user_id: Optional[str] = Field(
+        default=None,
+        description="User ID for payment"
+    )
+
+
+class InvokeResponse(BaseModel):
+    """Response from agent invocation."""
+    run_id: str
+    agent_id: str
+    success: bool
+    content: str
+    data: Dict[str, Any] = Field(default_factory=dict)
+    error: Optional[str] = None
+    payments: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class StreamResponse:
@@ -60,6 +87,8 @@ class A2AErrorCode:
 
 
 __all__ = [
+    "InvokeRequest",
+    "InvokeResponse",
     "StreamResponse",
     "A2AErrorCode",
     # Re-exported from aip_sdk.types

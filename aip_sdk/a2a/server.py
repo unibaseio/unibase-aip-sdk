@@ -27,7 +27,7 @@ from a2a.utils.message import get_message_text
 from a2a.client.helpers import create_text_message_object
 
 # Import Unibase extensions
-from .types import StreamResponse, A2AErrorCode
+from .types import StreamResponse, A2AErrorCode, InvokeRequest, InvokeResponse
 
 
 class A2AServer:
@@ -397,6 +397,115 @@ class A2AServer:
                     "message": str(e)
                 }
                 return JSONResponse(content=error_response, status_code=500)
+
+        # Standard Butler-style Invoke endpoints
+        @app.post("/invoke", response_model=InvokeResponse)
+        async def invoke_direct(request: InvokeRequest):
+            """Direct invocation (non-streaming)."""
+            try:
+                # Prepare task and message
+                # Use context.run_id if available, otherwise generate
+                run_id = (request.context or {}).get("run_id") or uuid.uuid4().hex
+                agent_id = self._agent_id or f"erc8004:{self.registration_config.get('handle', 'unknown')}"
+                
+                # Create A2A Message from request.message
+                msg_data = {
+                    "messageId": uuid.uuid4().hex,
+                    "role": Role.user,
+                    "parts": [{"text": request.message}],
+                    "metadata": request.context or {}
+                }
+                msg = self._parse_message(msg_data)
+                
+                # Use the existing message/send logic but return InvokeResponse
+                # This ensures consistent task management and history
+                params = {
+                    "id": run_id,
+                    "message": msg_data
+                }
+                
+                task_result = await self._handle_message_send(params)
+                
+                # Map Task to InvokeResponse
+                # Extract content from history
+                content = ""
+                for m in reversed(task_result.get("history", [])):
+                    if m.get("role") == Role.agent:
+                         # Extract text from parts
+                         parts = m.get("parts", [])
+                         if parts and "text" in parts[0]:
+                             content = parts[0]["text"]
+                         break
+                
+                return InvokeResponse(
+                    run_id=run_id,
+                    agent_id=agent_id,
+                    success=task_result.get("status", {}).get("state") == TaskState.completed,
+                    content=content,
+                    data=task_result.get("metadata", {}),
+                    error=task_result.get("status", {}).get("message") if task_result.get("status", {}).get("state") == TaskState.failed else None,
+                    payments=(task_result.get("metadata", {})).get("aip_events", [])
+                )
+
+            except Exception as e:
+                logger.exception(f"Error in /invoke: {e}")
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": str(e), "success": False}
+                )
+
+        @app.post("/invoke/stream")
+        async def invoke_stream(request: InvokeRequest):
+            """Streaming invocation (SSE)."""
+            try:
+                run_id = (request.context or {}).get("run_id") or uuid.uuid4().hex
+                
+                # Create A2A Message
+                msg_data = {
+                    "messageId": uuid.uuid4().hex,
+                    "role": Role.user,
+                    "parts": [{"text": request.message}],
+                    "metadata": request.context or {}
+                }
+                msg = self._parse_message(msg_data)
+                
+                # Determine task context
+                if run_id in self._tasks:
+                    task = self._tasks[run_id]
+                else:
+                    task = Task(
+                        id=run_id,
+                        context_id=uuid.uuid4().hex,
+                        status=TaskStatus(state=TaskState.submitted),
+                        history=[msg],
+                    )
+                
+                async def event_generator():
+                    # Stream the output from task_handler
+                    async for response in self.task_handler(task, msg):
+                        # For /invoke/stream, we can yield raw content or JSON chunks
+                        if response.raw_content:
+                            yield response.raw_content
+                        else:
+                            event = response.get_event()
+                            if event:
+                                # Standard SSE format for Butler Agent
+                                yield f"data: {json.dumps(event.model_dump(by_alias=True, exclude_none=True))}\n\n"
+                    
+                    # Final event indicating completion could be sent here if needed,
+                    # but usually SSE closure is enough.
+
+                return StreamingResponse(
+                    event_generator(),
+                    media_type="text/event-stream"
+                )
+
+            except Exception as e:
+                logger.exception(f"Error in /invoke/stream: {e}")
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": str(e), "success": False}
+                )
 
         # Health check
         @app.get("/health")
