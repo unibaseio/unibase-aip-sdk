@@ -12,6 +12,9 @@ from a2a.types import (
     TaskState,
     TaskStatus,
     TaskStatusUpdateEvent,
+    TaskArtifactUpdateEvent,
+    Artifact,
+    Role,
 )
 from aip_sdk.types import AgentCard
 
@@ -405,10 +408,6 @@ class GatewayA2AClient(A2AClientInterface):
 
     def _parse_stream_response(self, data: Dict) -> "StreamResponse":
         """Parse stream response data."""
-        from a2a.types import (
-            TaskArtifactUpdateEvent,
-            Artifact,
-        )
         from aip_sdk.a2a import StreamResponse
 
         response = StreamResponse()
