@@ -275,13 +275,13 @@ class GatewayA2AClient(A2AClientInterface):
         except httpx.HTTPStatusError as e:
             task.status = TaskStatus(
                 state=TaskState.failed,
-                message=Message.agent(f"Gateway error: {e.response.status_code}"),
+                message=Message(content=f"Gateway error: {e.response.status_code}", role=Role.agent),
             )
             return task
         except httpx.RequestError as e:
             task.status = TaskStatus(
                 state=TaskState.failed,
-                message=Message.agent(f"Request error: {e}"),
+                message=Message(content=f"Request error: {e}", role=Role.agent),
             )
             return task
 
@@ -294,7 +294,7 @@ class GatewayA2AClient(A2AClientInterface):
             if elapsed > self._max_poll_time:
                 task.status = TaskStatus(
                     state=TaskState.failed,
-                    message=Message.agent(f"Task timed out after {self._max_poll_time}s"),
+                    message=Message(content=f"Task timed out after {self._max_poll_time}s", role=Role.agent),
                 )
                 raise TaskTimeoutError(task_id, self._max_poll_time)
 
@@ -344,7 +344,7 @@ class GatewayA2AClient(A2AClientInterface):
                     error_msg = data.get("error", "Unknown error")
                     task.status = TaskStatus(
                         state=TaskState.failed,
-                        message=Message.agent(error_msg),
+                        message=Message(content=error_msg, role=Role.agent),
                     )
                     del self._pending_tasks[task_id]
                     return task
