@@ -6,7 +6,74 @@ from enum import Enum
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+import httpx
 
+
+import time
+
+class TaskSpec(BaseModel):
+    """Specification for a task to be executed."""
+    id: str = Field(default_factory=lambda: "task_" + str(int(time.time())))
+    name: str = ""
+    description: str = ""
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    run_id: Optional[str] = None
+    parent_id: Optional[str] = None
+    created_at: float = Field(default_factory=time.time)
+
+    model_config = ConfigDict(extra="allow")
+
+class A2AProxyAgent:
+    """Proxy for an agent that implements the /invoke interface."""
+    
+    def __init__(self, agent_id: str, endpoint_url: str):
+        self._agent_id = agent_id
+        self._endpoint_url = endpoint_url
+
+    @property
+    def agent_id(self) -> str:
+        return self._agent_id
+
+    async def perform_task(self, task: TaskSpec, context: Any = None) -> TaskResult:
+        """Call the agent's /invoke endpoint."""
+        url = f"{self._endpoint_url.rstrip('/')}/invoke"
+        
+        # Determine user_id if context is available
+        user_id = "anonymous"
+        if context and hasattr(context, "user_id"):
+            user_id = context.user_id
+            
+        # Prepare payload
+        payload = {
+            "text": task.description,
+            "payload": task.payload,
+            "metadata": task.metadata,
+            "task_id": task.id,
+            "run_id": task.run_id,
+            "user_id": user_id,
+        }
+        
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(url, json=payload, timeout=60.0)
+                if response.status_code != 200:
+                    return TaskResult.error_result(f"Agent error ({response.status_code}): {response.text}")
+                
+                result_data = response.json()
+                # Handle nested output or direct InvokeResponse
+                output = result_data.get("output")
+                if output is None:
+                    # Maybe it returned an InvokeResponse directly
+                    output = result_data
+                
+                return TaskResult(
+                    output=output,
+                    summary=result_data.get("summary", "Task completed via proxy"),
+                    metadata=result_data.get("metadata", {})
+                )
+            except Exception as e:
+                return TaskResult.error_result(f"Failed to call agent: {e}")
 
 class RunStatus(Enum):
     """Status of a run execution in the AIP platform."""
@@ -360,6 +427,7 @@ class AgentContext:
         memory_read: Callable[[str], Dict[str, Any]],
         memory_write: Callable[[str, Dict[str, Any], str], None],
         submit_commerce_work: Optional[Callable[[str, Any, str, Optional[int]], Awaitable[bool]]] = None,
+        list_agents: Optional[Callable[[], Awaitable[List[Any]]]] = None,
     ):
         self.invoke_agent = invoke_agent
         self.emit_event = emit_event
@@ -368,6 +436,21 @@ class AgentContext:
         self.memory_read = memory_read
         self.memory_write = memory_write
         self._submit_commerce_work = submit_commerce_work
+        self._list_agents = list_agents
+
+    async def list_agents(self, filter_query: Optional[str] = None) -> List[Any]:
+        """List and search agents in the registry.
+        
+        Returns:
+            List of agent metadata/records matching the query.
+        """
+        if self._list_agents:
+            # Assuming _list_agents might eventually support a filter,
+            # for now, we call it without arguments as per its __init__ type.
+            # If the underlying callable is updated to accept filter_query,
+            # this line would need to be updated accordingly.
+            return await self._list_agents()
+        return []
 
     async def submit_commerce_work(
         self,
