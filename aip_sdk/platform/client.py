@@ -530,10 +530,15 @@ class AsyncAIPClient:
         response.raise_for_status()
         return response.json()
 
-    async def accept_job(self, job_id: str, provider_id: str) -> Dict[str, Any]:
+    async def accept_job(self, job_id: str, provider_id: str, chain_id: Optional[int] = None) -> Dict[str, Any]:
         """Accept a job."""
+        params = {"provider_id": provider_id}
+        if chain_id:
+            params["chain_id"] = chain_id
+            
         response = await self.client.post(
-            f"/v1/jobs/{job_id}/accept?provider_id={provider_id}"
+            f"/v1/jobs/{job_id}/accept",
+            params=params
         )
         response.raise_for_status()
         return response.json()
@@ -544,6 +549,7 @@ class AsyncAIPClient:
         provider_id: str,
         deliverable_data: Any,
         description: str = "",
+        chain_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Submit work for a job."""
         payload = {
@@ -551,9 +557,14 @@ class AsyncAIPClient:
             "deliverable_data": deliverable_data,
             "description": description,
         }
+        params = {}
+        if chain_id:
+            params["chain_id"] = chain_id
+
         response = await self.client.post(
             f"/v1/jobs/{job_id}/submit",
             json=payload,
+            params=params,
         )
         response.raise_for_status()
         return response.json()
@@ -563,22 +574,32 @@ class AsyncAIPClient:
         job_id: str,
         evaluator_id: str,
         reason: str = "",
+        chain_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Complete a job (as evaluator)."""
         payload = {
             "evaluator_id": evaluator_id,
             "reason": reason,
         }
+        params = {}
+        if chain_id:
+            params["chain_id"] = chain_id
+
         response = await self.client.post(
             f"/v1/jobs/{job_id}/complete",
             json=payload,
+            params=params,
         )
         response.raise_for_status()
         return response.json()
 
-    async def get_job(self, job_id: str) -> Dict[str, Any]:
+    async def get_job(self, job_id: str, chain_id: Optional[int] = None) -> Dict[str, Any]:
         """Get job details."""
-        response = await self.client.get(f"/v1/jobs/{job_id}")
+        params = {}
+        if chain_id:
+            params["chain_id"] = chain_id
+            
+        response = await self.client.get(f"/v1/jobs/{job_id}", params=params)
         response.raise_for_status()
         return response.json()
     
@@ -758,9 +779,9 @@ class AIPClient:
         """Create a new job."""
         return self._run(self._async_client.create_job(**kwargs))
 
-    def accept_job(self, job_id: str, provider_id: str) -> Dict[str, Any]:
+    def accept_job(self, job_id: str, provider_id: str, chain_id: Optional[int] = None) -> Dict[str, Any]:
         """Accept a job."""
-        return self._run(self._async_client.accept_job(job_id, provider_id))
+        return self._run(self._async_client.accept_job(job_id, provider_id, chain_id=chain_id))
 
     def submit_job_work(self, **kwargs) -> Dict[str, Any]:
         """Submit work for a job."""
@@ -770,6 +791,6 @@ class AIPClient:
         """Complete a job."""
         return self._run(self._async_client.complete_job(**kwargs))
 
-    def get_job(self, job_id: str) -> Dict[str, Any]:
+    def get_job(self, job_id: str, chain_id: Optional[int] = None) -> Dict[str, Any]:
         """Get job details."""
-        return self._run(self._async_client.get_job(job_id))
+        return self._run(self._async_client.get_job(job_id, chain_id=chain_id))

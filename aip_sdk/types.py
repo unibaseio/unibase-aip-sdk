@@ -359,6 +359,7 @@ class AgentContext:
         receive_message: Callable[[Optional[str], Optional[float]], Awaitable[Any]],
         memory_read: Callable[[str], Dict[str, Any]],
         memory_write: Callable[[str, Dict[str, Any], str], None],
+        submit_commerce_work: Optional[Callable[[str, Any, str, Optional[int]], Awaitable[bool]]] = None,
     ):
         self.invoke_agent = invoke_agent
         self.emit_event = emit_event
@@ -366,6 +367,25 @@ class AgentContext:
         self.receive_message = receive_message
         self.memory_read = memory_read
         self.memory_write = memory_write
+        self._submit_commerce_work = submit_commerce_work
+
+    async def submit_commerce_work(
+        self,
+        job_id: str,
+        deliverable_data: Any,
+        description: str = "",
+        chain_id: Optional[int] = None,
+    ) -> bool:
+        """Submit project work to the commerce layer.
+        
+        This automatically triggers the on-chain submission and 
+        subsequent validation (e.g. UMA assertion).
+        """
+        if self._submit_commerce_work:
+            return await self._submit_commerce_work(
+                job_id, deliverable_data, description, chain_id
+            )
+        raise NotImplementedError("Commerce submission not supported in this context")
 
     async def call_agent(
         self,
@@ -450,6 +470,7 @@ class AgentContext:
             receive_message=ctx.receive_message,
             memory_read=ctx.memory_read,
             memory_write=ctx.memory_write,
+            submit_commerce_work=getattr(ctx, "submit_commerce_work", None),
         )
 
     @classmethod
@@ -560,6 +581,7 @@ class AgentContext:
             receive_message=receive_message or (lambda topic, timeout: None),
             memory_read=memory_read or (lambda scope: {}),
             memory_write=memory_write or (lambda scope, data, desc: None),
+            submit_commerce_work=None,  # A2A factory usually doesn't have direct commerce access yet
         )
 
 

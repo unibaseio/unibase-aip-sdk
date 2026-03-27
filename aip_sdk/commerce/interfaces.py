@@ -7,12 +7,14 @@ from typing import Any, Dict, List, Optional
 
 class JobStatus(str, Enum):
     OPEN = "open"
+    FUNDED = "funded"
     ACCEPTED = "accepted"
     SUBMITTED = "submitted"
     COMPLETED = "completed"
     REJECTED = "rejected"
     EXPIRED = "expired"
     REFUNDED = "refunded"
+    DISPUTED = "disputed"
 
 
 @dataclass
@@ -53,26 +55,26 @@ class BaseMarketDriver:
     async def create_job(self, spec: JobSpec) -> str:
         raise NotImplementedError
 
-    async def accept_job(self, job_id: str, provider_id: str) -> bool:
+    async def accept_job(self, job_id: str, provider_id: str, chain_id: Optional[int] = None) -> bool:
         raise NotImplementedError
 
     async def submit_deliverable(
-        self, job_id: str, provider_id: str, deliverable_hash: str, deliverable_uri: str
+        self, job_id: str, provider_id: str, deliverable_hash: str, deliverable_uri: str, chain_id: Optional[int] = None
     ) -> bool:
         raise NotImplementedError
 
     async def complete_job(
-        self, job_id: str, evaluator_id: str, reason_hash: str
+        self, job_id: str, evaluator_id: str, reason_hash: str, chain_id: Optional[int] = None
     ) -> bool:
         raise NotImplementedError
 
     async def reject_job(
-        self, job_id: str, rejector_id: str, reason_hash: str
+        self, job_id: str, rejector_id: str, reason_hash: str, chain_id: Optional[int] = None
     ) -> bool:
         raise NotImplementedError
 
-    async def set_budget(self, job_id: str, amount: float) -> bool:
+    async def set_budget(self, job_id: str, amount: float, chain_id: Optional[int] = None) -> bool:
         raise NotImplementedError
 
-    async def get_job(self, job_id: str) -> Optional[JobRecord]:
+    async def get_job(self, job_id: str, chain_id: Optional[int] = None) -> Optional[JobRecord]:
         raise NotImplementedError

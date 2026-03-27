@@ -11,6 +11,7 @@ from a2a.types import (
     TaskStatus,
     Message,
     TaskStatusUpdateEvent,
+    TaskArtifactUpdateEvent,
     Artifact,
     TextPart,
     Role,
@@ -305,6 +306,31 @@ class A2AAgentAdapter:
             """Write to memory (stub implementation)."""
             logger.debug(f"Memory write to scope: {scope}")
 
+        async def submit_commerce_work(
+            job_id: str,
+            deliverable_data: Any,
+            description: str = "",
+            chain_id: Optional[int] = None,
+        ) -> bool:
+            """Submit project work to the commerce layer."""
+            from aip_sdk.platform.client import AsyncAIPClient
+            from aip_sdk.commerce.client import JobClient
+
+            # Use provider ID from the agent
+            provider_id = getattr(self._agent, "agent_id", "unknown")
+            
+            logger.info(f"Agent {provider_id} submitting work for job {job_id}")
+            
+            async with AsyncAIPClient() as aip_client:
+                job_client = JobClient(aip_client)
+                return await job_client.submit(
+                    job_id=job_id,
+                    provider_id=provider_id,
+                    deliverable_data=deliverable_data,
+                    description=description,
+                    chain_id=chain_id
+                )
+
         return AgentContext(
             invoke_agent=invoke_agent,
             emit_event=emit_event,
@@ -312,6 +338,7 @@ class A2AAgentAdapter:
             receive_message=receive_message,
             memory_read=memory_read,
             memory_write=memory_write,
+            submit_commerce_work=submit_commerce_work,
         )
 
     async def handle_task(
@@ -329,6 +356,7 @@ class A2AAgentAdapter:
                 task_id=task.id,
                 context_id=task.context_id,
                 status=TaskStatus(state=TaskState.working),
+                final=False,
             )
         )
 
@@ -374,6 +402,11 @@ class A2AAgentAdapter:
                 "intent": agent_message.intent,
                 "context": agent_message.context.to_dict(),
             }
+            
+            # Merge metadata into top-level payload for convenience
+            if agent_message.context.metadata:
+                payload.update(agent_message.context.metadata)
+                
             if agent_message.hints:
                 payload["hints"] = agent_message.hints.to_dict()
             if agent_message.structured_data:
@@ -402,10 +435,11 @@ class A2AAgentAdapter:
             # If there's structured output, yield as artifact
             if result.output and result.success:
                 yield StreamResponse(
-                    artifact_update=TaskStatusUpdateEvent(
+                    artifact_update=TaskArtifactUpdateEvent(
                         task_id=task.id,
                         context_id=task.context_id,
                         artifact=Artifact(
+                            artifact_id=str(uuid.uuid4()),
                             parts=[
                                 TextPart(text=json.dumps(result.output, indent=2))
                             ],
