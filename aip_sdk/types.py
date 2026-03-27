@@ -428,6 +428,7 @@ class AgentContext:
         memory_write: Callable[[str, Dict[str, Any], str], None],
         submit_commerce_work: Optional[Callable[[str, Any, str, Optional[int]], Awaitable[bool]]] = None,
         list_agents: Optional[Callable[[], Awaitable[List[Any]]]] = None,
+        invoke_a2a_agent: Optional[Callable[[str, Any, str], Awaitable[TaskResult]]] = None,
     ):
         self.invoke_agent = invoke_agent
         self.emit_event = emit_event
@@ -437,6 +438,7 @@ class AgentContext:
         self.memory_write = memory_write
         self._submit_commerce_work = submit_commerce_work
         self._list_agents = list_agents
+        self.invoke_a2a_agent = invoke_a2a_agent
 
     async def list_agents(self, filter_query: Optional[str] = None) -> List[Any]:
         """List and search agents in the registry.
@@ -515,6 +517,26 @@ class AgentContext:
             payload=payload,
             reason=reason,
         )
+
+    async def call_a2a_agent(
+        self,
+        agent_id: str,
+        task_name: str,
+        payload: Dict[str, Any],
+        reason: str = "",
+    ) -> TaskResult:
+        """Call another agent directly via A2A protocol (if supported)."""
+        from uuid import uuid4
+
+        task = Task(
+            task_id=str(uuid4()),
+            name=task_name,
+            description=reason or f"Direct A2A call to {agent_id}",
+            payload=payload,
+        )
+        if self.invoke_a2a_agent:
+            return await self.invoke_a2a_agent(agent_id, task, reason)
+        return await self.invoke_agent(agent_id, task, reason)
 
     async def log(self, event_type: str, **data: Any) -> None:
         """Log an event."""
