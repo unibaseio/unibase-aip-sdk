@@ -84,7 +84,7 @@ class BaseMarketDriver:
     ) -> bool:
         raise NotImplementedError
 
-    async def set_budget(self, job_id: str, amount: float, chain_id: Optional[int] = None) -> bool:
+    async def set_budget(self, job_id: str, amount: float, chain_id: Optional[int] = None, reward_token: str = "native") -> bool:
         raise NotImplementedError
 
     async def get_job(self, job_id: str, chain_id: Optional[int] = None) -> Optional[JobRecord]:
