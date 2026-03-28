@@ -931,6 +931,14 @@ class A2AServer:
             # - endpoint_url=<URL>: push mode (public agent)
             endpoint_url = config.get("endpoint_url")
 
+            from aip_sdk.types import AgentJobOffering, AgentJobResource
+            
+            job_offerings_raw = config.get("job_offerings", [])
+            job_offerings = [AgentJobOffering.model_validate(j) for j in job_offerings_raw]
+            
+            job_resources_raw = config.get("job_resources", [])
+            job_resources = [AgentJobResource.model_validate(r) for r in job_resources_raw]
+
             agent_config = AgentConfig(
                 name=config["name"],
                 handle=handle,
@@ -940,6 +948,8 @@ class A2AServer:
                 cost_model=cost_model,
                 currency=config.get("currency", "USD"),
                 metadata=config.get("metadata", {}),
+                job_offerings=job_offerings,
+                job_resources=job_resources,
             )
 
             # Register with platform

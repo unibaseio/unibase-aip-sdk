@@ -229,6 +229,8 @@ def expose_as_a2a(
     endpoint_url: str = None,
     metadata: Dict[str, Any] = None,
     chain_id: int = 97,
+    job_offerings: List[AgentJobOffering] = None,
+    job_resources: List[AgentJobResource] = None,
     **kwargs,
 ) -> A2AServer:
     """Expose ANY callable as an A2A-compatible agent service.
@@ -326,6 +328,8 @@ def expose_as_a2a(
             "endpoint_url": endpoint_url,
             "metadata": metadata or {},
             "chain_id": chain_id,
+            "job_offerings": job_offerings or [],
+            "job_resources": job_resources or [],
         }
 
     # Create and return server
@@ -353,6 +357,8 @@ class AgentWrapper:
         version: str = "1.0.0",
         endpoint_url: str = None,
         metadata: Dict[str, Any] = None,
+        job_offerings: List[AgentJobOffering] = None,
+        job_resources: List[AgentJobResource] = None,
     ):
         """Initialize agent wrapper."""
         self.agent = agent
@@ -361,6 +367,8 @@ class AgentWrapper:
         self.version = version
         self.endpoint_url = endpoint_url
         self.metadata = metadata or {}
+        self.job_offerings = job_offerings or []
+        self.job_resources = job_resources or []
 
         if method and skill_methods:
             raise ValueError("Cannot specify both 'method' and 'skill_methods'")
@@ -483,6 +491,8 @@ class AgentWrapper:
             defaultInputModes=["text/plain", "application/json"],
             defaultOutputModes=["text/plain", "application/json"],
             metadata=self.metadata,
+            jobOfferings=self.job_offerings,
+            jobResources=self.job_resources,
         )
 
         return A2AServer(

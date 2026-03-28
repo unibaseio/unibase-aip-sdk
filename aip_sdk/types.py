@@ -315,6 +315,8 @@ class AgentConfig(BaseModel):
     currency: str = "USD"
     metadata: Dict[str, Any] = Field(default_factory=dict)
     endpoint_url: Optional[str] = None
+    job_offerings: List[AgentJobOffering] = Field(default_factory=list)
+    job_resources: List[AgentJobResource] = Field(default_factory=list)
 
     @property
     def price(self) -> float:
@@ -356,6 +358,8 @@ class AgentConfig(BaseModel):
                 AgentRegistration(agentId=agent_id, agentRegistry=registry_address)
             ] if registry_address else [],
             skills=skill_cards,
+            jobOfferings=self.job_offerings,
+            jobResources=self.job_resources,
             metadata=self.metadata,
             provider=AgentProvider(organization="BitAgent", url="https://bitagent.io"),
         )
@@ -376,6 +380,8 @@ class AgentConfig(BaseModel):
                 "amount": self.price,
                 "currency": self.currency,
             },
+            "jobOfferings": [j.model_dump(by_alias=True) for j in self.job_offerings],
+            "jobResources": [r.model_dump(by_alias=True) for r in self.job_resources],
             "metadata": self.metadata,
             "endpoint_url": self.endpoint_url,
         }
