@@ -59,12 +59,23 @@ class BaseMarketDriver:
         raise NotImplementedError
 
     async def submit_deliverable(
-        self, job_id: str, provider_id: str, deliverable_hash: str, deliverable_uri: str, chain_id: Optional[int] = None
+        self,
+        job_id: str,
+        provider_id: str,
+        deliverable_hash: str,
+        deliverable_uri: str,
+        chain_id: Optional[int] = None,
+        signer_account: Any = None,
     ) -> bool:
         raise NotImplementedError
 
     async def complete_job(
-        self, job_id: str, evaluator_id: str, reason_hash: str, chain_id: Optional[int] = None
+        self,
+        job_id: str,
+        evaluator_id: str,
+        reason_hash: str,
+        chain_id: Optional[int] = None,
+        signer_account: Any = None,
     ) -> bool:
         raise NotImplementedError
 
