@@ -87,5 +87,8 @@ class BaseMarketDriver:
     async def set_budget(self, job_id: str, amount: float, chain_id: Optional[int] = None, reward_token: str = "native", signer_account: Any = None) -> bool:
         raise NotImplementedError
 
+    async def fund_job(self, job_id: str, amount: float, chain_id: Optional[int] = None, signer_account: Any = None) -> bool:
+        raise NotImplementedError
+
     async def get_job(self, job_id: str, chain_id: Optional[int] = None) -> Optional[JobRecord]:
         raise NotImplementedError
