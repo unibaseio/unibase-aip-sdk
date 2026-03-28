@@ -223,6 +223,37 @@ class AgentSkillCard(BaseModel):
     inputModes: List[str] = Field(default=["text/plain"])
     outputModes: List[str] = Field(default=["application/json"])
 
+class AgentJobOffering(BaseModel):
+    """A structured job offering as defined in an Agent Card (Virtuals ACP compatible)."""
+    id: int | str
+    name: str
+    description: str = ""
+    type: str = "JOB"
+    price: float = 0.0
+    price_v2: Optional[Dict[str, Any]] = Field(None, alias="priceV2")
+    job_input: Optional[str] = Field(None, alias="jobInput")
+    job_output: Optional[str] = Field(None, alias="jobOutput")
+    requirement: Optional[Dict[str, Any]] = None
+    deliverable: Optional[Dict[str, Any]] = None
+    sla_minutes: int = Field(0, alias="slaMinutes")
+    required_funds: bool = Field(False, alias="requiredFunds")
+    is_managed_fund: bool = Field(False, alias="isManagedFund")
+    restricted: bool = False
+    hide: bool = False
+    active: bool = True
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+class AgentJobResource(BaseModel):
+    """An auxiliary read-only resource defined in an Agent Card."""
+    id: int | str
+    url: str
+    name: str
+    type: str = "RESOURCE"
+    description: str = ""
+
+    model_config = ConfigDict(extra="allow")
+
 class AgentCard(BaseModel):
     """
     Standard Agent Card strictly following the ERC-8004 specification.
@@ -265,6 +296,8 @@ class AgentCard(BaseModel):
     
     # Agent Capabilities
     skills: List[AgentSkillCard] = Field(default_factory=list)
+    jobOfferings: List[AgentJobOffering] = Field(default_factory=list)
+    jobResources: List[AgentJobResource] = Field(default_factory=list)
     trustModels: List[str] = Field(default_factory=lambda: ["feedback", "inference-validation", "tee-attestation"])
 
     model_config = ConfigDict(populate_by_name=True)
@@ -429,6 +462,7 @@ class AgentContext:
         submit_commerce_work: Optional[Callable[[str, Any, str, Optional[int]], Awaitable[bool]]] = None,
         list_agents: Optional[Callable[[], Awaitable[List[Any]]]] = None,
         invoke_a2a_agent: Optional[Callable[[str, Any, str], Awaitable[TaskResult]]] = None,
+        search_job_offerings: Optional[Callable[[str, Optional[int]], Awaitable[List[Any]]]] = None,
     ):
         self.invoke_agent = invoke_agent
         self.emit_event = emit_event
@@ -439,6 +473,17 @@ class AgentContext:
         self._submit_commerce_work = submit_commerce_work
         self._list_agents = list_agents
         self.invoke_a2a_agent = invoke_a2a_agent
+        self._search_job_offerings = search_job_offerings
+
+    async def search_job_offerings(self, query: str, chain_id: Optional[int] = None) -> List[Any]:
+        """Search for structured job offerings across the registry."""
+        if self._search_job_offerings:
+            import inspect
+            res = self._search_job_offerings(query, chain_id)
+            if inspect.isawaitable(res):
+                return await res
+            return res
+        return []
 
     async def list_agents(self, filter_query: Optional[str] = None) -> List[Any]:
         """List and search agents in the registry.
