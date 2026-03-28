@@ -619,7 +619,8 @@ class AgentContext:
             else:
                 payload = {"task": str(subtask)}
 
-            message = Message.user(json.dumps(payload))
+            from a2a.types import TextPart
+            message = Message(role=Role.user, parts=[TextPart(text=json.dumps(payload))])
 
             aip_context = AIPContext(
                 run_id=run_id,
