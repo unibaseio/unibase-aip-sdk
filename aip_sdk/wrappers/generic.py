@@ -24,7 +24,15 @@ from a2a.types import (
     Role,
     Task,
 )
-from aip_sdk.types import AgentCard, AgentSkillCard, AgentCapabilities, AgentProvider, AgentService
+from aip_sdk.types import (
+    AgentCard, 
+    AgentSkillCard, 
+    AgentCapabilities, 
+    AgentProvider, 
+    AgentService,
+    AgentJobOffering,
+    AgentJobResource
+)
 from a2a.utils.message import get_message_text
 from a2a.client.helpers import create_text_message_object
 
