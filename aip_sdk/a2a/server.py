@@ -661,6 +661,9 @@ class A2AServer:
         try:
             history = list(task.history or [])
             artifacts = list(task.artifacts or [])
+            
+            accumulated_content = []
+            initial_history_len = len(history)
 
             async for response in self.task_handler(task, message):
                 if response.message:
@@ -676,6 +679,39 @@ class A2AServer:
                     )
                 if response.artifact_update:
                     artifacts.append(response.artifact_update.artifact)
+                
+                # Accumulate raw content to synthesize message at the end
+                if response.raw_content:
+                    try:
+                        line = response.raw_content.strip()
+                        if line.startswith("data:"):
+                            content = line[5:].strip()
+                            if content.startswith('"') and content.endswith('"'):
+                                content = json.loads(content)
+                            elif content.startswith("{") and content.endswith("}"):
+                                try:
+                                    json_data = json.loads(content)
+                                    if isinstance(json_data, dict):
+                                        if "delta" in json_data:
+                                            content = json_data["delta"]
+                                        elif "text" in json_data:
+                                            content = json_data["text"]
+                                        elif "choices" in json_data and isinstance(json_data["choices"], list):
+                                            delta = json_data["choices"][0].get("delta", {})
+                                            if "content" in delta:
+                                                content = delta["content"]
+                                except:
+                                    pass
+                            if isinstance(content, str):
+                                accumulated_content.append(content)
+                    except Exception:
+                        pass
+                        
+            if accumulated_content and len(history) == initial_history_len:
+                full_text = "".join(accumulated_content)
+                if full_text:
+                    agent_msg = create_text_message_object(Role.agent, full_text)
+                    history.append(agent_msg)
 
             # Mark as completed if not already in terminal state
             final_state = task.status.state
