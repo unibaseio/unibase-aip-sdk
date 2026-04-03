@@ -468,7 +468,7 @@ class AgentContext:
         submit_commerce_work: Optional[Callable[[str, Any, str, Optional[int]], Awaitable[bool]]] = None,
         list_agents: Optional[Callable[[], Awaitable[List[Any]]]] = None,
         invoke_a2a_agent: Optional[Callable[[str, Any, str], Awaitable[TaskResult]]] = None,
-        search_job_offerings: Optional[Callable[[str, Optional[int]], Awaitable[List[Any]]]] = None,
+        search_job_offerings: Optional[Callable[[str, Optional[int], bool], Awaitable[List[Any]]]] = None,
     ):
         self.invoke_agent = invoke_agent
         self.emit_event = emit_event
@@ -481,11 +481,11 @@ class AgentContext:
         self.invoke_a2a_agent = invoke_a2a_agent
         self._search_job_offerings = search_job_offerings
 
-    async def search_job_offerings(self, query: str, chain_id: Optional[int] = None) -> List[Any]:
+    async def search_job_offerings(self, query: str, chain_id: Optional[int] = None, onchain_only: bool = False) -> List[Any]:
         """Search for structured job offerings across the registry."""
         if self._search_job_offerings:
             import inspect
-            res = self._search_job_offerings(query, chain_id)
+            res = self._search_job_offerings(query, chain_id, onchain_only)
             if inspect.isawaitable(res):
                 return await res
             return res
