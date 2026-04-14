@@ -209,7 +209,7 @@ async def register_agent_to_platform(user_wallet: str) -> str:
         # 4. Register agent (including on-chain registration)
         print("\n[4/4] Registering agent with platform (on-chain registration)...")
         try:
-            result = await client.register_agent(user_id, agent_config)
+            result = await client.register_agent(agent_config, user_id=user_id)
             agent_id = result.get("agent_id")
             print(f"  ✓ Agent registered successfully!")
             print(f"  Agent ID: {agent_id}")

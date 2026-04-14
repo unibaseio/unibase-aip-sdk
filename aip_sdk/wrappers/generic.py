@@ -227,6 +227,7 @@ def expose_as_a2a(
     version: str = "1.0.0",
     # Account integration
     user_id: str = None,
+    privy_token: str = None,
     aip_endpoint: str = None,
     gateway_url: str = None,
     handle: str = None,
@@ -253,13 +254,14 @@ def expose_as_a2a(
         streaming: Enable streaming responses
         raw_response: If True, handler output is sent directly as SSE data without JSON-RPC wrapping
         version: Agent version string
-        user_id: AIP platform user ID for registration
+        user_id: User wallet address (for on-chain ERC-8004 registration)
+        privy_token: Privy Bearer Token for authentication (auto-reads PRIVY_TOKEN env if not set)
         aip_endpoint: AIP platform endpoint URL
         handle: Agent handle (auto-generated from name if not provided)
-        auto_register: Whether to auto-register with AIP platform
+        auto_register: Whether to auto-register with AIP platform (POST /agents/register)
         cost_model: Pricing model (use CostModel(base_call_fee=0.05) for $0.05/call)
         currency: Currency for pricing (default: USD)
-        chain_id: Target blockchain ID for registration (default: 97)
+        chain_id: Target blockchain ID for registration (default: 97, BSC Testnet)
         **kwargs: Additional arguments passed to AgentCard
 
     Returns:
@@ -325,6 +327,7 @@ def expose_as_a2a(
     if resolved_user_id and (auto_register or gateway_url):
         registration_config = {
             "user_id": resolved_user_id,
+            "privy_token": privy_token or os.getenv("PRIVY_TOKEN"),
             "aip_endpoint": resolved_aip_endpoint,
             "gateway_url": gateway_url,
             "handle": handle,

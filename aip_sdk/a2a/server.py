@@ -934,9 +934,10 @@ class A2AServer:
             return
 
         config = self.registration_config
-        user_id = config["user_id"]
-        aip_endpoint = config["aip_endpoint"]
-        handle = config["handle"]
+        user_id = config.get("user_id")
+        privy_token = config.get("privy_token")
+        aip_endpoint = config.get("aip_endpoint", get_default_aip_endpoint())
+        handle = config.get("handle")
 
         logger.info(f"[DEBUG] Registration config endpoint_url: {config.get('endpoint_url')}")
         logger.info(f"Registering agent with AIP platform at {aip_endpoint}")
@@ -988,8 +989,8 @@ class A2AServer:
                 job_resources=job_resources,
             )
 
-            # Register with platform
-            result = await self._aip_client.register_agent(user_id, agent_config)
+            # Register with platform (uses POST /agents/register)
+            result = await self._aip_client.register_agent(agent_config, user_id=user_id, privy_token=privy_token)
             self._agent_id = result.get("agent_id", f"erc8004:{handle}")
 
             logger.info(f"Agent registered successfully: {self._agent_id}")
