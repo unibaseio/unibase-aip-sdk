@@ -43,12 +43,40 @@ Binance API docs:
     │  4. server.run_sync()  Start HTTP service                        │
     │         │                                                       │
     │         ├── endpoint_url is set →  PUSH mode (Gateway calls)     │
-    │         └── endpoint_url=None  →  POLLING mode (Agent polls)    │
+    │         └── endpoint_url=None  →  POLLING mode (Agent polls)     │
+    │              + via_gateway=True  → Butler discovers via gateway  │
     │                                                                 │
     └─────────────────────────────────────────────────────────────────┘
 
 =============================================================================
-2. Interactive Authorization Flow
+2. Butler Agent + Job Queue (NEW)
+=============================================================================
+
+Agents registered via SDK can be discovered and called by Butler via the Gateway:
+
+    User → Butler → search_job_offerings() → Gateway → Agent (your service)
+
+Butler discovers agents via job_offerings vector search. When an agent is hired:
+  - If agent has endpoint_url (PUSH) → Butler calls directly
+  - If agent has via_gateway=True → Butler routes via Gateway job queue:
+      GET  /gateway/jobs/poll     (agent polls, every 3s)
+      POST /gateway/jobs/complete (agent submits result)
+
+Key: set via_gateway=True when endpoint_url=None and you want Butler to call you!
+
+    expose_as_a2a(
+        endpoint_url=None,          # Private agent (no public URL)
+        via_gateway=True,           # KEY: Butler can discover and route via gateway
+        job_offerings=[...],         # REQUIRED: so Butler finds you in search
+        ...
+    )
+
+SDK automatically detects via_gateway or job_offerings and polls the correct endpoint:
+  - job_offerings present or via_gateway=True → /gateway/jobs/poll + /gateway/jobs/complete
+  - otherwise → /gateway/tasks/poll + /gateway/tasks/complete
+
+=============================================================================
+3. Interactive Authorization Flow
 =============================================================================
 
 When UNIBASE_PROXY_AUTH is not found in config.json:
@@ -69,7 +97,7 @@ When UNIBASE_PROXY_AUTH is not found in config.json:
     Step 6: Proceed with registration and startup
 
 =============================================================================
-3. Registration API (POST /agents/register)
+4. Registration API (POST /agents/register)
 =============================================================================
 
 SDK calls:
@@ -93,7 +121,7 @@ Body format (AgentConfig):
     Chain ID 97 → BSC Testnet (default)
 
 =============================================================================
-4. Chain ID Reference
+5. Chain ID Reference
 =============================================================================
 
     Chain ID 97  →  BSC Testnet (default, for testing)
@@ -101,7 +129,7 @@ Body format (AgentConfig):
     Chain ID 1   →  Ethereum Mainnet
 
 =============================================================================
-5. Environment Variables & Config File
+6. Environment Variables & Config File
 =============================================================================
 
 Config file: ~/.config/unibase-aip-sdk/config.json
@@ -583,6 +611,7 @@ def build_server(
     endpoint_url: str | None,
     port: int,
     polling: bool = False,
+    via_gateway: bool = False,
 ):
     """
     Build and return A2AServer via expose_as_a2a.
@@ -592,6 +621,8 @@ def build_server(
 
     mode_tag = "polling" if polling else "push"
     metadata_extra = {"mode": mode_tag}
+    if via_gateway:
+        metadata_extra["via_gateway"] = True
 
     print(f"\n{'='*70}")
     print("Step 3: Start Agent Service")
@@ -602,7 +633,10 @@ def build_server(
     if endpoint_url:
         print(f"  URL:      {endpoint_url}")
     if polling:
-        print(f"  Gateway:  polls every 3 seconds")
+        if via_gateway:
+            print(f"  Queue:    JOB-QUEUE (/gateway/jobs/poll) - Butler can discover this agent")
+        else:
+            print(f"  Queue:    TASK-QUEUE (/gateway/tasks/poll)")
     print(f"  Port:     {port}")
     print()
 
@@ -618,6 +652,7 @@ def build_server(
         handle=handle,
         auto_register=False,
         endpoint_url=endpoint_url,
+        via_gateway=via_gateway,
         cost_model=CostModel(base_call_fee=0.0),
         chain_id=97,
         skills=[
@@ -808,6 +843,7 @@ def example_polling_mode():
         handle=handle,
         auto_register=True,
         endpoint_url=None,
+        via_gateway=True,            # KEY: Butler can discover & route via gateway job queue
         cost_model=CostModel(base_call_fee=0.0),
         chain_id=97,
         skills=[
@@ -824,7 +860,7 @@ def example_polling_mode():
     )
 
     print(f"  Mode:     POLLING (no public URL)")
-    print(f"  Gateway:  polls every 3 seconds")
+    print(f"  Queue:    JOB-QUEUE (/gateway/jobs/poll) - Butler can discover this agent")
     print(f"  Register: POST https://api.aip.unibase.com/agents/register")
     print()
     print("  Chain:")
@@ -874,6 +910,7 @@ def example_polling_manual():
         endpoint_url=None,
         port=8203,
         polling=True,
+        via_gateway=True,
     )
     server.run_sync()
 

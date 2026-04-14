@@ -232,6 +232,9 @@ def expose_as_a2a(
     gateway_url: str = None,
     handle: str = None,
     auto_register: bool = True,
+    # Whether this agent should be callable via the gateway (Butler can discover it)
+    # When True, adds "via_gateway": true to metadata so Butler can route calls through gateway
+    via_gateway: bool = False,
     # Pricing via cost_model
     cost_model: CostModel = None,
     currency: str = "USD",
@@ -259,6 +262,9 @@ def expose_as_a2a(
         aip_endpoint: AIP platform endpoint URL
         handle: Agent handle (auto-generated from name if not provided)
         auto_register: Whether to auto-register with AIP platform (POST /agents/register)
+        via_gateway: If True, adds "via_gateway": true to metadata so Butler can
+            discover and route calls to this agent via the gateway job queue.
+            Recommended for local/private agents that want to be hired via the marketplace.
         cost_model: Pricing model (use CostModel(base_call_fee=0.05) for $0.05/call)
         currency: Currency for pricing (default: USD)
         chain_id: Target blockchain ID for registration (default: 97, BSC Testnet)
@@ -325,6 +331,11 @@ def expose_as_a2a(
     # Config is needed for both registration AND Gateway polling
     registration_config = None
     if resolved_user_id and (auto_register or gateway_url):
+        # Merge via_gateway into metadata
+        merged_metadata = dict(metadata or {})
+        if via_gateway:
+            merged_metadata["via_gateway"] = True
+
         registration_config = {
             "user_id": resolved_user_id,
             "privy_token": privy_token or os.getenv("PRIVY_TOKEN"),
@@ -337,10 +348,11 @@ def expose_as_a2a(
             "cost_model": resolved_cost_model.to_dict(),
             "currency": currency,
             "endpoint_url": endpoint_url,
-            "metadata": metadata or {},
+            "metadata": merged_metadata,
             "chain_id": chain_id,
             "job_offerings": job_offerings or [],
             "job_resources": job_resources or [],
+            "via_gateway": via_gateway,
         }
 
     # Create and return server

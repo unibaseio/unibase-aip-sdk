@@ -117,9 +117,14 @@ class A2AServer:
                 gateway_url = self.registration_config.get("gateway_url")
 
                 if endpoint_url is None and gateway_url:
-                    logger.info(f"Starting Gateway polling mode (private agent)")
+                    has_job_offerings = bool(self.registration_config.get("job_offerings"))
+                    via_gateway = self.registration_config.get("via_gateway", False)
+                    use_job_queue = has_job_offerings or via_gateway
+                    mode = "JOB-QUEUE" if use_job_queue else "TASK-QUEUE"
+                    logger.info(f"Starting Gateway polling mode (private agent, {mode})")
                     logger.info(f"  Gateway URL: {gateway_url}")
                     logger.info(f"  Agent Handle: {self.registration_config.get('handle')}")
+                    logger.info(f"  job_offerings: {has_job_offerings}, via_gateway: {via_gateway}")
                     self._should_poll = True
                     self._polling_task = asyncio.create_task(self._gateway_polling_loop())
 
@@ -1000,7 +1005,14 @@ class A2AServer:
             # Don't fail startup - agent can still work without platform registration
 
     async def _gateway_polling_loop(self):
-        """Poll Gateway for tasks (for private agents behind firewall)."""
+        """Poll Gateway for tasks or job assignments (for private agents behind firewall).
+
+        Two modes:
+        - Job queue mode: agent has job_offerings or via_gateway=True
+          → polls GET /gateway/jobs/poll, submits to POST /gateway/jobs/complete
+        - Task queue mode: agent has no job_offerings
+          → polls GET /gateway/tasks/poll, submits to POST /gateway/tasks/complete
+        """
         try:
             import httpx
         except ImportError:
@@ -1010,33 +1022,50 @@ class A2AServer:
         config = self.registration_config
         gateway_url = config.get("gateway_url")
         handle = config.get("handle")
-        poll_interval = 3.0  # Poll every 3 seconds
+        poll_interval = 3.0
 
-        logger.info(f"Starting Gateway polling loop for agent {handle}")
+        # Decide polling mode based on job_offerings or via_gateway flag
+        has_job_offerings = bool(config.get("job_offerings"))
+        via_gateway = config.get("via_gateway", False)
+        use_job_queue = has_job_offerings or via_gateway
+
+        if use_job_queue:
+            poll_endpoint = f"{gateway_url}/gateway/jobs/poll"
+            complete_endpoint = f"{gateway_url}/gateway/jobs/complete"
+            logger.info(f"Starting Gateway JOB-QUEUE polling loop for agent {handle}")
+            logger.info(f"  (job_offerings={has_job_offerings}, via_gateway={via_gateway})")
+        else:
+            poll_endpoint = f"{gateway_url}/gateway/tasks/poll"
+            complete_endpoint = f"{gateway_url}/gateway/tasks/complete"
+            logger.info(f"Starting Gateway TASK-QUEUE polling loop for agent {handle}")
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             while self._should_poll:
                 try:
-                    # Poll for tasks
-                    response = await client.get(
-                        f"{gateway_url}/gateway/tasks/poll",
-                        params={"agent": handle, "timeout": 5.0}
-                    )
+                    if use_job_queue:
+                        response = await client.get(
+                            poll_endpoint,
+                            params={"agent": handle, "timeout": 5.0}
+                        )
+                    else:
+                        response = await client.get(
+                            poll_endpoint,
+                            params={"agent": handle, "timeout": 5.0}
+                        )
 
                     if response.status_code == 200:
-                        task_data = response.json()
-                        task_id = task_data.get("task_id")
+                        data = response.json()
+                        task_id = data.get("task_id") or data.get("job_id")
 
                         if task_id:
-                            logger.info(f"Received task {task_id} from Gateway")
-
-                            # Process the task
-                            await self._process_gateway_task(task_id, task_data, gateway_url, client)
+                            logger.info(f"Received assignment {task_id} from Gateway (job_queue={use_job_queue})")
+                            if use_job_queue:
+                                await self._process_gateway_job(task_id, data, gateway_url, client, complete_endpoint)
+                            else:
+                                await self._process_gateway_task(task_id, data, gateway_url, client)
                         else:
-                            # No task available
                             await asyncio.sleep(poll_interval)
                     else:
-                        # Poll failed, wait and retry
                         logger.debug(f"Poll returned {response.status_code}, retrying...")
                         await asyncio.sleep(poll_interval)
 
@@ -1045,6 +1074,52 @@ class A2AServer:
                     await asyncio.sleep(poll_interval)
 
         logger.info("Gateway polling loop stopped")
+
+    async def _process_gateway_job(self, job_id: str, job_data: Dict, gateway_url: str, client, complete_endpoint: str):
+        """Process a job assignment received from the job queue."""
+        try:
+            # Extract the actual work from job_data
+            payload = job_data.get("payload", {})
+            job_input = job_data.get("job_input", "")
+
+            # Build a task-like structure for the handler
+            rpc_request = {
+                "method": payload.get("method", "message/send"),
+                "params": {"message": {"parts": [{"kind": "text", "text": job_input}]}},
+                "id": job_id,
+            }
+
+            # Call the agent handler
+            result = await self._handle_jsonrpc(rpc_request, rpc_request["id"])
+
+            # Submit result back to Gateway job queue
+            await client.post(
+                complete_endpoint,
+                json={
+                    "job_id": job_id,
+                    "agent_id": job_data.get("agent_id"),
+                    "result": result,
+                    "status": "completed",
+                }
+            )
+
+            logger.info(f"Job {job_id} completed and result submitted to job queue")
+
+        except Exception as e:
+            logger.error(f"Error processing job {job_id}: {e}")
+            try:
+                await client.post(
+                    complete_endpoint,
+                    json={
+                        "job_id": job_id,
+                        "agent_id": job_data.get("agent_id"),
+                        "result": {},
+                        "status": "failed",
+                        "error": str(e),
+                    }
+                )
+            except Exception:
+                pass
 
     async def _process_gateway_task(self, task_id: str, task_data: Dict, gateway_url: str, client):
         """Process a task received from Gateway."""
