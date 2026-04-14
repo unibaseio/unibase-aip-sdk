@@ -992,6 +992,7 @@ class A2AServer:
                 metadata=config.get("metadata", {}),
                 job_offerings=job_offerings,
                 job_resources=job_resources,
+                chain_id=config.get("chain_id", 97),
             )
 
             # Register with platform (uses POST /agents/register)

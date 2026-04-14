@@ -317,6 +317,7 @@ class AgentConfig(BaseModel):
     endpoint_url: Optional[str] = None
     job_offerings: List[AgentJobOffering] = Field(default_factory=list)
     job_resources: List[AgentJobResource] = Field(default_factory=list)
+    chain_id: Optional[int] = Field(97, description="Target blockchain ID for on-chain ERC-8004 registration (default: 97)")
 
     @property
     def price(self) -> float:
@@ -384,6 +385,7 @@ class AgentConfig(BaseModel):
             "jobResources": [r.model_dump(by_alias=True) for r in self.job_resources],
             "metadata": self.metadata,
             "endpoint_url": self.endpoint_url,
+            "chain_id": self.chain_id,
         }
 
 
