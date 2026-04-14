@@ -192,7 +192,11 @@ class AsyncAIPClient:
             reg_data = dict(agent)
 
         # Add user_id to payload for blockchain registration
-        if user_id:
+        # When privy_token is provided, the server derives user_id from the Bearer token
+        # (resolving through agent→owner chain). We must NOT pass user_id in the body
+        # because the SDK's user_id (from JWT sub) may differ from the server-resolved
+        # owner, causing a 401 "Authenticated user does not match" error.
+        if user_id and not privy_token:
             reg_data["user_id"] = user_id
 
         # Build headers (Bearer token auth)
