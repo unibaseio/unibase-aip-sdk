@@ -137,7 +137,7 @@ Config file: ~/.config/unibase-aip-sdk/config.json
 
 Environment variables (optional overrides):
     AIP_ENDPOINT=https://api.aip.unibase.com
-    GATEWAY_URL=http://gateway.aip.unibase.com
+    GATEWAY_URL=https://gateway.aip.unibase.com
     AGENT_PUBLIC_URL=http://your-public-ip:8200
     UNIBASE_PROXY_AUTH=eyJ...          (overrides config.json)
     UNIBASE_PAY_URL=https://api.pay.unibase.com
@@ -233,7 +233,7 @@ async def interactive_auth() -> tuple[str, str]:
             )
             resp.raise_for_status()
             data = resp.json()
-            auth_url = data.get("authUrl")
+            auth_url = data.get("auth_url") or data.get("authUrl")
             if not auth_url:
                 raise ValueError(f"No authUrl in response: {data}")
             print(f"  ✓ Got auth URL")
@@ -270,19 +270,34 @@ async def interactive_auth() -> tuple[str, str]:
     return token, wallet or ""
 
 
-def ensure_auth() -> tuple[str, str]:
+_cli_token = None  # Set via --token CLI arg
+_cli_gateway_url = None  # Set via --gateway-url CLI arg
+
+
+def _get_gateway_url() -> str:
+    """Get gateway URL from CLI arg, env var, or default."""
+    if _cli_gateway_url:
+        return _cli_gateway_url
+    return os.environ.get("GATEWAY_URL", "https://gateway.aip.unibase.com")
+
+
+def ensure_auth(token: str = None) -> tuple[str, str]:
     """
     Ensure a valid UNIBASE_PROXY_AUTH token is available.
-    Checks config.json first; if missing, runs interactive auth.
+    Checks CLI arg first, then config.json; if missing, runs interactive auth.
     Returns (token, wallet_address).
     """
-    token = load_auth_token()
+    token = token or _cli_token or load_auth_token()
+
     if token:
         wallet = extract_wallet_from_token(token) or ""
         print(f"\n{'='*70}")
         print("Step 1: Load Authorization")
         print(f"{'='*70}")
-        print(f"  ✓ Loaded auth token from {CONFIG_FILE}")
+        if _cli_token:
+            print(f"  ✓ Using token from --token argument")
+        else:
+            print(f"  ✓ Loaded auth token from {CONFIG_FILE}")
         if wallet:
             print(f"  Wallet: {wallet}")
         else:
@@ -646,9 +661,9 @@ def build_server(
         port=port,
         host="0.0.0.0",
         description=description,
-        user_id=f"user:{wallet}",
+        user_id=wallet if wallet else None,
         aip_endpoint="https://api.aip.unibase.com",
-        gateway_url="http://gateway.aip.unibase.com",
+        gateway_url=_get_gateway_url(),
         handle=handle,
         auto_register=False,
         endpoint_url=endpoint_url,
@@ -719,9 +734,10 @@ def example_auto_register():
         port=8200,
         host="0.0.0.0",
         description=description,
-        user_id=f"user:{wallet}",
+        user_id=wallet if wallet else None,
+        privy_token=auth_token,
         aip_endpoint="https://api.aip.unibase.com",
-        gateway_url="http://gateway.aip.unibase.com",
+        gateway_url=_get_gateway_url(),
         handle=handle,
         auto_register=True,
         endpoint_url=endpoint_url,
@@ -837,9 +853,10 @@ def example_polling_mode():
         port=8202,
         host="0.0.0.0",
         description=description,
-        user_id=f"user:{wallet}",
+        user_id=wallet if wallet else None,
+        privy_token=auth_token,
         aip_endpoint="https://api.aip.unibase.com",
-        gateway_url="http://gateway.aip.unibase.com",
+        gateway_url=_get_gateway_url(),
         handle=handle,
         auto_register=True,
         endpoint_url=None,
@@ -954,6 +971,8 @@ if __name__ == "__main__":
           polling-manual - manual register + POLLING mode
         """,
     )
+    parser.add_argument("--token", help="Authorization token (skips interactive auth)")
+    parser.add_argument("--gateway-url", help="Gateway URL (e.g. http://<ec2-ip>:8081)")
     args = parser.parse_args()
 
     print(f"""
@@ -965,6 +984,11 @@ if __name__ == "__main__":
 ║  Chain:   BSC Testnet (chain_id=97)                         ║
 ╚══════════════════════════════════════════════════════════════╝
     """)
+
+    # Set CLI token so ensure_auth() can use it
+    import examples.agent_sdk_startup_guide as m
+    m._cli_token = args.token
+    m._cli_gateway_url = args.gateway_url
 
     try:
         if args.mode == "auto":

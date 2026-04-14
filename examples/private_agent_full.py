@@ -11,7 +11,7 @@ This example demonstrates how to create an agent in a private environment:
 
 Environment Variables (configured in .env):
 - AIP_ENDPOINT=https://api.aip.unibase.com
-- GATEWAY_URL=http://gateway.aip.unibase.com
+- GATEWAY_URL=https://gateway.aip.unibase.com
 - MEMBASE_ACCOUNT=0x5ea13664c5ce67753f208540d25b913788aa3daa (test account)
 """
 
@@ -273,7 +273,7 @@ def start_agent_service(user_wallet: str, agent_id: str):
 
     # Get configuration
     aip_endpoint = os.environ.get("AIP_ENDPOINT", "https://api.aip.unibase.com")
-    gateway_url = os.environ.get("GATEWAY_URL", "http://gateway.aip.unibase.com")
+    gateway_url = os.environ.get("GATEWAY_URL", "https://gateway.aip.unibase.com")
     agent_host = os.environ.get("AGENT_HOST", "0.0.0.0")
     agent_port = int(os.environ.get("AGENT_PORT", "8201"))
 
