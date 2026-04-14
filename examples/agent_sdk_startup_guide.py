@@ -8,7 +8,19 @@ and how the Agent communicates with the Gateway after startup.
 The example uses a real Binance price query agent with job_offerings to show
 how to publish structured job offerings in the ERC-8183 marketplace.
 
-Binance API docs: https://developers.binance.com/docs/price-index-queries/klines/Klines_Data
+Authorization Flow:
+  - On startup, check for local config.json (~/.config/unibase-aip-sdk/config.json)
+  - If UNIBASE_PROXY_AUTH token exists, load it directly
+  - If not found, run interactive auth: call /v1/init → print authUrl → ask for token
+  - After token is obtained, save to config.json
+  - Then proceed to POST /agents/register and start the agent service
+
+Privy/Unibase Pay docs:
+  POST https://api.pay.unibase.com/v1/init        → get authUrl
+  POST https://api.pay.unibase.com/v1/wallets/me/rpc  → wallet RPC calls
+
+Binance API docs:
+  https://developers.binance.com/docs/price-index-queries/klines/Klines_Data
 
 =============================================================================
 1. Startup Flow Overview
@@ -18,50 +30,43 @@ Binance API docs: https://developers.binance.com/docs/price-index-queries/klines
     │                     Agent SDK Startup Flow                       │
     ├─────────────────────────────────────────────────────────────────┤
     │                                                                 │
-    │  1. Create Handler (your business logic)                         │
-    │         │                                                       │
+    │  1. [Authorization] Check config.json → load UNIBASE_PROXY_AUTH │
+    │         │ (if missing: interactive auth flow)                    │
     │         ▼                                                       │
-    │  2. Call expose_as_a2a() to create A2AServer                     │
+    │  2. Extract wallet address from token (sub claim)                 │
+    │         ▼                                                       │
+    │  3. Call POST /agents/register (auth via Bearer token)           │
     │         │                                                       │
     │         ├── auto_register=True  →  Auto register on startup     │
-    │         │      │                                                 │
-    │         │      └── POST /agents/register                         │
-    │         │           (calls https://api.aip.unibase.com)          │
-    │         │                                                       │
     │         ├── auto_register=False →  Manual register (call API)    │
-    │         │                                                       │
     │         ▼                                                       │
-    │  3. server.run_sync()  Start HTTP service                        │
+    │  4. server.run_sync()  Start HTTP service                        │
     │         │                                                       │
     │         ├── endpoint_url is set →  PUSH mode (Gateway calls)     │
-    │         │                                                       │
     │         └── endpoint_url=None  →  POLLING mode (Agent polls)    │
     │                                                                 │
     └─────────────────────────────────────────────────────────────────┘
 
 =============================================================================
-2. Two Communication Modes with Gateway
+2. Interactive Authorization Flow
 =============================================================================
 
-【PUSH Mode (Public Agent)】
-  - Scenario: Agent has a publicly accessible address
-  - Registration requires endpoint_url (Gateway must reach it)
-  - Gateway receives user request → directly POSTs to Agent /a2a endpoint
-  - Agent is passive, no active polling needed
+When UNIBASE_PROXY_AUTH is not found in config.json:
 
-  Chain:
-    User → Gateway → Agent (direct HTTP POST /a2a)
+    Step 1: Call POST https://api.pay.unibase.com/v1/init
+            → receive {"authUrl": "https://..."}
 
-【POLLING Mode (Private Agent)】
-  - Scenario: Agent is behind firewall, no public address
-  - Registration does NOT provide endpoint_url (set to None)
-  - Agent actively polls Gateway's /gateway/tasks/poll every 3 seconds
-  - No public exposure needed, higher security
+    Step 2: Print auth URL to stdout:
+            "I need your authorization to access the Terminal features."
+            "Please click here to approve: https://..."
 
-  Chain:
-    Agent (every 3s) → Gateway /gateway/tasks/poll
-    Gateway has task → returns task JSON
-    Agent processes → POST /gateway/tasks/complete to submit result
+    Step 3: Read the Authorization token from stdin
+
+    Step 4: Validate token (decode JWT sub claim → wallet address)
+
+    Step 5: Save {UNIBASE_PROXY_AUTH: "<token>"} to config.json
+
+    Step 6: Proceed with registration and startup
 
 =============================================================================
 3. Registration API (POST /agents/register)
@@ -70,59 +75,44 @@ Binance API docs: https://developers.binance.com/docs/price-index-queries/klines
 SDK calls:
 
     POST https://api.aip.unibase.com/agents/register
+    Authorization: Bearer {UNIBASE_PROXY_AUTH}
 
 Body format (AgentConfig):
     {
         "name": "Agent Name",
-        "handle": "unique_handle",        # Global unique, used for Gateway routing
+        "handle": "unique_handle",
         "description": "...",
-        "endpoint_url": "...",            # Required for PUSH, null for POLLING
+        "endpoint_url": "...",
         "skills": [...],
-        "job_offerings": [...],           # ERC-8183 job offerings
-        "cost_model": {"base_call_fee": 0.001, ...},
-        "metadata": {
-            "chain_id": 97,
-            ...
-        }
+        "job_offerings": [...],
+        "cost_model": {"base_call_fee": 0.0, ...},
+        "metadata": {"chain_id": 97, ...}
     }
 
-    Auth:
-    - Header: Authorization: Bearer {privy_token}
-    - Body: user_id for on-chain ERC-8004 registration
+    Auth: Bearer token in Authorization header
+    Chain ID 97 → BSC Testnet (default)
 
 =============================================================================
 4. Chain ID Reference
 =============================================================================
-
-Chain ID is used for on-chain ERC-8004 registration, it does NOT affect
-Agent uniqueness. Agent uniqueness is determined by user_id + handle.
 
     Chain ID 97  →  BSC Testnet (default, for testing)
     Chain ID 56  →  BSC Mainnet
     Chain ID 1   →  Ethereum Mainnet
 
 =============================================================================
-5. Environment Variables
+5. Environment Variables & Config File
 =============================================================================
 
-Set before running (or create a .env file):
+Config file: ~/.config/unibase-aip-sdk/config.json
+    {"UNIBASE_PROXY_AUTH": "eyJ..."}
 
-    # AIP Platform
+Environment variables (optional overrides):
     AIP_ENDPOINT=https://api.aip.unibase.com
-
-    # Gateway
     GATEWAY_URL=http://gateway.aip.unibase.com
-
-    # Agent public URL (PUSH mode requires this, POLLING mode can skip)
     AGENT_PUBLIC_URL=http://your-public-ip:8200
-
-    # Your wallet address (used for user_id in registration)
-    MEMBASE_ACCOUNT=0x5ea13664c5ce67753f208540d25b913788aa3daa
-
-    # Privy Token (for auth - can also be passed via privy_token param)
-    PRIVY_TOKEN=your_privy_token_here
-
-    # ERC-8004 on-chain registration
+    UNIBASE_PROXY_AUTH=eyJ...          (overrides config.json)
+    UNIBASE_PAY_URL=https://api.pay.unibase.com
     AGENT_REGISTRATION_CHAIN_ID=97
     AGENT_REGISTRATION_RPC_URL=https://bsc-testnet.publicnode.com
 """
@@ -130,8 +120,150 @@ Set before running (or create a .env file):
 import asyncio
 import os
 import sys
+import json
+import base64
 import httpx
+from pathlib import Path
 from datetime import datetime
+
+
+# ============================================================================
+# Config & Authorization
+# ============================================================================
+
+CONFIG_DIR = Path.home() / ".config" / "unibase-aip-sdk"
+CONFIG_FILE = CONFIG_DIR / "config.json"
+UNIBASE_PAY_URL = os.environ.get("UNIBASE_PAY_URL", "https://api.pay.unibase.com")
+
+
+def load_auth_token() -> str | None:
+    """
+    Load UNIBASE_PROXY_AUTH from config.json.
+    Returns None if not found (interactive auth needed).
+    """
+    # Env override
+    env_token = os.environ.get("UNIBASE_PROXY_AUTH")
+    if env_token:
+        return env_token
+
+    if not CONFIG_FILE.exists():
+        return None
+
+    try:
+        with open(CONFIG_FILE) as f:
+            cfg = json.load(f)
+        return cfg.get("UNIBASE_PROXY_AUTH")
+    except (json.JSONDecodeError, IOError):
+        return None
+
+
+def save_auth_token(token: str) -> None:
+    """Save UNIBASE_PROXY_AUTH to config.json"""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    with open(CONFIG_FILE, "w") as f:
+        json.dump({"UNIBASE_PROXY_AUTH": token}, f, indent=2)
+    print(f"  ✓ Saved auth token to {CONFIG_FILE}")
+
+
+def extract_wallet_from_token(token: str) -> str | None:
+    """
+    Decode JWT payload to extract wallet address from 'sub' claim.
+    Returns None if decode fails.
+    """
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            return None
+        payload = parts[1]
+        payload += "=" * ((4 - len(payload) % 4) % 4)
+        data = json.loads(base64.b64decode(payload).decode("utf-8"))
+        sub = data.get("sub", "")
+        # sub can be an address or a privy ID; return as-is for now
+        return sub if sub else None
+    except Exception:
+        return None
+
+
+async def interactive_auth() -> tuple[str, str]:
+    """
+    Run interactive authorization flow to get UNIBASE_PROXY_AUTH token.
+
+    Returns:
+        (token, wallet_address)
+    """
+    print("\n" + "=" * 70)
+    print("Step 1: Interactive Authorization")
+    print("=" * 70)
+
+    # Step 1: Call /v1/init to get authUrl
+    print("\n[1/3] Fetching authorization URL...")
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{UNIBASE_PAY_URL}/v1/init",
+                json=True,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            auth_url = data.get("authUrl")
+            if not auth_url:
+                raise ValueError(f"No authUrl in response: {data}")
+            print(f"  ✓ Got auth URL")
+    except Exception as e:
+        print(f"  ✗ Failed to fetch auth URL: {e}")
+        raise RuntimeError(
+            f"Cannot reach {UNIBASE_PAY_URL}. Check your network or UNIBASE_PAY_URL."
+        )
+
+    # Step 2: Print auth URL and wait for token
+    print(f"\n[2/3] Authorization Required")
+    print("  I need your authorization to access the Terminal features.")
+    print(f"\n  👉 Please click this link to approve:\n")
+    print(f"  {auth_url}")
+    print(f"\n  After approval, you'll receive an Authorization token.")
+    print(f"\n  👉 Paste your Authorization token below and press Enter:\n")
+
+    token = input("  Token: ").strip()
+
+    if not token:
+        raise RuntimeError("No token provided. Aborted.")
+
+    # Step 3: Validate token
+    print("\n[3/3] Validating token...")
+    wallet = extract_wallet_from_token(token)
+    if wallet:
+        print(f"  ✓ Token valid. Wallet: {wallet}")
+    else:
+        print("  ⚠ Token decode failed (no sub claim), proceeding anyway...")
+
+    # Save to config
+    save_auth_token(token)
+
+    return token, wallet or ""
+
+
+def ensure_auth() -> tuple[str, str]:
+    """
+    Ensure a valid UNIBASE_PROXY_AUTH token is available.
+    Checks config.json first; if missing, runs interactive auth.
+    Returns (token, wallet_address).
+    """
+    token = load_auth_token()
+    if token:
+        wallet = extract_wallet_from_token(token) or ""
+        print(f"\n{'='*70}")
+        print("Step 1: Load Authorization")
+        print(f"{'='*70}")
+        print(f"  ✓ Loaded auth token from {CONFIG_FILE}")
+        if wallet:
+            print(f"  Wallet: {wallet}")
+        else:
+            print("  ⚠ Could not decode wallet from token (will resolve on registration)")
+        return token, wallet
+
+    # Not found → interactive auth
+    token, wallet = asyncio.run(interactive_auth())
+    return token, wallet
 
 
 # ============================================================================
@@ -162,7 +294,13 @@ class BinancePriceAgent:
         # Parse symbol
         symbol = self._extract_symbol(text)
         if not symbol:
-            return "Usage: <SYMBOL> price, e.g. 'BTC price' or 'ETHUSDT price'"
+            return (
+                "Usage:\n"
+                "  <SYMBOL> price        → current price, e.g. 'BTCUSDT price'\n"
+                "  <SYMBOL> 24h change   → 24h stats, e.g. 'ETH 24h change'\n"
+                "  <SYMBOL> klines <N>   → N daily candles, e.g. 'SOL klines 30'\n"
+                "  <SYMBOL> orderbook    → orderbook depth, e.g. 'BNB orderbook 5'\n"
+            )
 
         # Route to handler
         if "kline" in text_lower or "candle" in text_lower:
@@ -178,14 +316,20 @@ class BinancePriceAgent:
 
     def _extract_symbol(self, text: str) -> str:
         """Extract trading symbol from message, default to USDT quote"""
-        # Remove common words
-        clean = text.replace("PRICE", "").replace("KLINE", "").replace("CANDLE", "")
-        clean = clean.replace("24H", "").replace("CHANGE", "").replace("STATS", "")
-        clean = clean.replace("ORDERBOOK", "").replace("DEPTH", "").replace("GET", "")
-        clean = clean.strip()
+        clean = (
+            text.replace("PRICE", "")
+            .replace("KLINE", "")
+            .replace("CANDLE", "")
+            .replace("24H", "")
+            .replace("CHANGE", "")
+            .replace("STATS", "")
+            .replace("ORDERBOOK", "")
+            .replace("DEPTH", "")
+            .replace("GET", "")
+            .strip()
+        )
 
-        parts = clean.split()
-        for part in parts:
+        for part in clean.split():
             part = part.strip("!?.,")
             if not part:
                 continue
@@ -200,7 +344,6 @@ class BinancePriceAgent:
             if part.endswith("USD"):
                 return f"{part}USD"
 
-        # Default to BTCUSDT
         return "BTCUSDT"
 
     def _extract_limit(self, text: str, default: int = 10) -> int:
@@ -224,9 +367,14 @@ class BinancePriceAgent:
                 )
                 if resp.status_code == 200:
                     data = resp.json()
-                    return f"💰 {symbol} Current Price\n\nPrice: ${float(data['price']):,.4f}\nSymbol: {data['symbol']}\nTime: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                    return (
+                        f"💰 {symbol} Current Price\n\n"
+                        f"  Price:  ${float(data['price']):,.4f}\n"
+                        f"  Symbol: {data['symbol']}\n"
+                        f"  Time:   {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                    )
                 elif resp.status_code == 400:
-                    return f"❌ Invalid symbol: {symbol}. Try e.g. 'BTCUSDT', 'ETHUSDT'"
+                    return f"❌ Invalid symbol: {symbol}. Try 'BTCUSDT', 'ETHUSDT', etc."
                 else:
                     return f"❌ Binance API error: {resp.status_code}"
         except Exception as e:
@@ -246,13 +394,13 @@ class BinancePriceAgent:
                     emoji = "🟢" if pct >= 0 else "🔴"
                     return (
                         f"📊 {symbol} 24h Stats\n\n"
-                        f"{emoji} Change: {pct:+.2f}%\n"
-                        f"   Last Price: ${float(d['lastPrice']):,.4f}\n"
-                        f"   High:       ${float(d['highPrice']):,.4f}\n"
-                        f"   Low:        ${float(d['lowPrice']):,.4f}\n"
-                        f"   Volume:     {float(d['volume']):,.2f} {symbol.replace('USDT','')}\n"
-                        f"   Quote Vol:  ${float(d['quoteVolume']):,.2f}\n"
-                        f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                        f"  {emoji} Change:   {pct:+.2f}%\n"
+                        f"  Last Price: ${float(d['lastPrice']):,.4f}\n"
+                        f"  High:       ${float(d['highPrice']):,.4f}\n"
+                        f"  Low:        ${float(d['lowPrice']):,.4f}\n"
+                        f"  Volume:     {float(d['volume']):,.2f} {symbol.replace('USDT','')}\n"
+                        f"  Quote Vol:  ${float(d['quoteVolume']):,.2f}\n"
+                        f"  Time:       {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
                     )
                 else:
                     return f"❌ Binance API error: {resp.status_code}"
@@ -275,10 +423,7 @@ class BinancePriceAgent:
                     lines = [f"📊 {symbol} Daily Klines (last {len(data)} bars)\n"]
                     for k in reversed(data[-limit:]):
                         open_time = datetime.fromtimestamp(k[0] / 1000).strftime("%Y-%m-%d")
-                        o = float(k[1])
-                        h = float(k[2])
-                        l = float(k[3])
-                        c = float(k[4])
+                        o, h, l, c = float(k[1]), float(k[2]), float(k[3]), float(k[4])
                         vol = float(k[5])
                         lines.append(
                             f"  {open_time}  O:{o:>10.4f}  H:{h:>10.4f}  "
@@ -321,8 +466,6 @@ class BinancePriceAgent:
 from aip_sdk import CostModel
 from aip_sdk.types import AgentJobOffering, AgentJobResource
 
-# Define job offerings for the ERC-8183 marketplace
-# These are published on the agent card and discoverable in the job market
 BINANCE_JOB_OFFERINGS = [
     AgentJobOffering(
         id="binance_price_query",
@@ -335,8 +478,8 @@ BINANCE_JOB_OFFERINGS = [
             "amount": 0,
             "currency": "USDC",
         },
-        job_input="Text query in format: '<SYMBOL> price' or '<SYMBOL> 24h change' or '<SYMBOL> klines <N>'. Example: 'BTCUSDT price' or 'ETH 24h change'",
-        job_output="JSON or text response with price data, 24h stats, klines, or orderbook",
+        job_input="Text query: '<SYMBOL> price' | '<SYMBOL> 24h change' | '<SYMBOL> klines <N>' | '<SYMBOL> orderbook'. Example: 'BTCUSDT price' or 'ETH 24h change'",
+        job_output="Text or JSON with price data, 24h stats, klines, or orderbook",
         requirement={
             "input_modes": ["text/plain"],
             "output_modes": ["text/plain", "application/json"],
@@ -354,7 +497,6 @@ BINANCE_JOB_OFFERINGS = [
     ),
 ]
 
-# Define auxiliary resources (read-only data feeds)
 BINANCE_JOB_RESOURCES = [
     AgentJobResource(
         id="binance_api",
@@ -367,93 +509,34 @@ BINANCE_JOB_RESOURCES = [
 
 
 # ============================================================================
-# Example 1: auto_register=True (auto register, PUSH mode)
+# Shared Registration Helper
 # ============================================================================
 
-from aip_sdk import expose_as_a2a
+from aip_sdk import AsyncAIPClient, AgentConfig, SkillConfig, expose_as_a2a
 from aip_sdk.types import AgentSkillCard
 
 
-def example_auto_register():
+async def register_agent(
+    wallet: str,
+    auth_token: str,
+    handle: str,
+    name: str,
+    description: str,
+    endpoint_url: str | None,
+    port: int,
+) -> str:
     """
-    Start Binance Price Agent with auto registration (PUSH mode)
+    Register agent via POST /agents/register (Bearer auth).
+
+    Returns agent_id on success.
     """
-    wallet = os.environ.get("MEMBASE_ACCOUNT", "0x5ea13664c5ce67753f208540d25b913788aa3daa")
-    public_url = os.environ.get("AGENT_PUBLIC_URL", "http://your-public-ip:8200")
+    print(f"\n{'='*70}")
+    print("Step 2: Agent Registration")
+    print(f"{'='*70}")
+    print(f"  Endpoint: https://api.aip.unibase.com/agents/register")
+    print(f"  Wallet:   {wallet}")
+    print(f"  Handle:   {handle}")
 
-    agent = BinancePriceAgent()
-
-    server = expose_as_a2a(
-        name="Binance Price Agent",
-        handler=agent.handle,
-        port=8200,
-        host="0.0.0.0",
-        description="Real-time cryptocurrency price queries via Binance public API",
-
-        # --- Platform config ---
-        user_id=f"user:{wallet}",
-        aip_endpoint="https://api.aip.unibase.com",
-        gateway_url="http://gateway.aip.unibase.com",
-        handle="binance_price",
-
-        # --- Auto register (POST /agents/register on startup) ---
-        auto_register=True,
-
-        # --- PUSH mode (public agent, needs public URL) ---
-        endpoint_url=public_url,
-
-        # --- Pricing ---
-        cost_model=CostModel(base_call_fee=0.0),
-
-        # --- Chain ID (ERC-8004, default 97 = BSC Testnet) ---
-        chain_id=97,
-
-        # --- Skills (for Gateway routing) ---
-        skills=[
-            AgentSkillCard(
-                id="crypto.price",
-                name="Crypto Price Query",
-                description="Query real-time and historical crypto prices from Binance. Supports: current price, 24h change, klines/candles, orderbook depth.",
-                tags=["crypto", "binance", "price", "trading", "defi"],
-                examples=[
-                    "BTCUSDT price",
-                    "ETH 24h change",
-                    "SOL klines 30",
-                    "BNB orderbook depth 10",
-                ],
-            ),
-        ],
-
-        # --- ERC-8183 Job Offerings (marketplace listings) ---
-        job_offerings=BINANCE_JOB_OFFERINGS,
-        job_resources=BINANCE_JOB_RESOURCES,
-
-        metadata={
-            "author": "Unibase Demo",
-            "mode": "push",
-            "data_source": "binance_public_api",
-        },
-    )
-
-    print("Starting Binance Price Agent (auto register + PUSH mode)...")
-    print(f"  Auto register to: https://api.aip.unibase.com/agents/register")
-    print(f"  Gateway will call via: {public_url}")
-    print(f"  Chain ID: 97 (BSC Testnet)")
-    print()
-    server.run_sync()
-
-
-# ============================================================================
-# Example 2: auto_register=False (manual register, PUSH mode)
-# ============================================================================
-
-from aip_sdk import AsyncAIPClient, AgentConfig, SkillConfig
-
-
-async def register_manually(wallet: str, privy_token: str = None) -> str:
-    """
-    Manual Agent registration (step-by-step, production recommended)
-    """
     async with AsyncAIPClient(base_url="https://api.aip.unibase.com") as client:
         is_healthy = await client.health_check()
         if not is_healthy:
@@ -461,10 +544,10 @@ async def register_manually(wallet: str, privy_token: str = None) -> str:
         print("  ✓ Platform healthy")
 
         agent_config = AgentConfig(
-            name="Binance Price Agent",
-            handle="binance_price_manual",
-            description="Real-time cryptocurrency price queries via Binance public API",
-            endpoint_url=os.environ.get("AGENT_PUBLIC_URL", "http://your-public-ip:8201"),
+            name=name,
+            handle=handle,
+            description=description,
+            endpoint_url=endpoint_url,
             skills=[
                 SkillConfig(
                     skill_id="crypto.price",
@@ -476,48 +559,65 @@ async def register_manually(wallet: str, privy_token: str = None) -> str:
             metadata={
                 "chain_id": 97,
                 "author": "Unibase Demo",
-                "mode": "push",
             },
             job_offerings=BINANCE_JOB_OFFERINGS,
             job_resources=BINANCE_JOB_RESOURCES,
         )
 
-        result = await client.register_agent(agent_config, user_id=wallet, privy_token=privy_token)
+        result = await client.register_agent(
+            agent_config,
+            user_id=wallet,
+            privy_token=auth_token,
+        )
         agent_id = result.get("agent_id")
-        print(f"  ✓ Registered, Agent ID: {agent_id}")
+        print(f"  ✓ Registered. Agent ID: {agent_id}")
         return agent_id
 
 
-def example_manual_register():
+def build_server(
+    wallet: str,
+    auth_token: str,
+    handle: str,
+    name: str,
+    description: str,
+    endpoint_url: str | None,
+    port: int,
+    polling: bool = False,
+):
     """
-    Start Binance Price Agent with manual registration (PUSH mode)
+    Build and return A2AServer via expose_as_a2a.
+    Does NOT auto-register (registration is done separately).
     """
-    wallet = os.environ.get("MEMBASE_ACCOUNT", "0x5ea13664c5ce67753f208540d25b913788aa3daa")
-    public_url = os.environ.get("AGENT_PUBLIC_URL", "http://your-public-ip:8201")
-    privy_token = os.environ.get("PRIVY_TOKEN")
-
-    print("\n===== Step 1: Manual Agent Registration =====")
-    agent_id = asyncio.run(register_manually(wallet, privy_token))
-
-    print("\n===== Step 2: Start Agent Service =====")
-
     agent = BinancePriceAgent()
 
-    server = expose_as_a2a(
-        name="Binance Price Agent",
-        handler=agent.handle,
-        port=8201,
-        host="0.0.0.0",
-        description="Real-time cryptocurrency price queries via Binance public API",
+    mode_tag = "polling" if polling else "push"
+    metadata_extra = {"mode": mode_tag}
 
+    print(f"\n{'='*70}")
+    print("Step 3: Start Agent Service")
+    print(f"{'='*70}")
+    print(f"  Name:     {name}")
+    print(f"  Handle:   {handle}")
+    print(f"  Mode:     {'POLLING (no public URL)' if polling else 'PUSH (public URL)'}")
+    if endpoint_url:
+        print(f"  URL:      {endpoint_url}")
+    if polling:
+        print(f"  Gateway:  polls every 3 seconds")
+    print(f"  Port:     {port}")
+    print()
+
+    server = expose_as_a2a(
+        name=name,
+        handler=agent.handle,
+        port=port,
+        host="0.0.0.0",
+        description=description,
         user_id=f"user:{wallet}",
         aip_endpoint="https://api.aip.unibase.com",
         gateway_url="http://gateway.aip.unibase.com",
-        handle="binance_price_manual",
-
+        handle=handle,
         auto_register=False,
-
-        endpoint_url=public_url,
+        endpoint_url=endpoint_url,
         cost_model=CostModel(base_call_fee=0.0),
         chain_id=97,
         skills=[
@@ -526,53 +626,188 @@ def example_manual_register():
                 name="Crypto Price Query",
                 description="Query real-time and historical crypto prices from Binance",
                 tags=["crypto", "binance", "price", "trading", "defi"],
-                examples=["BTCUSDT price", "ETH 24h change", "SOL klines 30"],
-            ),
+                examples=[
+                    "BTCUSDT price",
+                    "ETH 24h change",
+                    "SOL klines 30",
+                    "BNB orderbook 5",
+                ],
+            )
         ],
         job_offerings=BINANCE_JOB_OFFERINGS,
         job_resources=BINANCE_JOB_RESOURCES,
-        metadata={
-            "author": "Unibase Demo",
-            "mode": "push",
-        },
+        metadata=metadata_extra,
     )
 
-    print("Starting Binance Price Agent (manual register + PUSH mode)...")
-    print(f"  Agent registered via API, ID: {agent_id}")
+    return server
+
+
+# ============================================================================
+# Example 1: auto register (auto_register=True)
+# PUSH mode - public agent with auto registration
+# ============================================================================
+
+def example_auto_register():
+    """
+    Start Binance Price Agent with auto registration (PUSH mode).
+
+    Auth:
+      - Checks config.json for UNIBASE_PROXY_AUTH
+      - If missing → runs interactive auth (call /v1/init → print authUrl → read token)
+      - Token is saved to config.json for future runs
+    """
+    wallet, auth_token, public_url = _load_env()
+
+    print("\n===== Step 1: Authorization =====")
+    # ensure_auth() checks config.json → loads token or runs interactive auth
+    auth_token, resolved_wallet = ensure_auth()
+    if resolved_wallet:
+        wallet = resolved_wallet  # prefer wallet decoded from token
+
+    handle = "binance_price"
+    name = "Binance Price Agent"
+    description = "Real-time cryptocurrency price queries via Binance public API"
+
+    print("\n===== Step 2: Agent Registration (auto) =====")
+    print("  Mode: auto_register=True (SDK registers on server startup)")
+
+    agent = BinancePriceAgent()
+    endpoint_url = public_url
+
+    print(f"\n{'='*70}")
+    print("Step 3: Start Agent Service")
+    print(f"{'='*70}")
+
+    server = expose_as_a2a(
+        name=name,
+        handler=agent.handle,
+        port=8200,
+        host="0.0.0.0",
+        description=description,
+        user_id=f"user:{wallet}",
+        aip_endpoint="https://api.aip.unibase.com",
+        gateway_url="http://gateway.aip.unibase.com",
+        handle=handle,
+        auto_register=True,
+        endpoint_url=endpoint_url,
+        cost_model=CostModel(base_call_fee=0.0),
+        chain_id=97,
+        skills=[
+            AgentSkillCard(
+                id="crypto.price",
+                name="Crypto Price Query",
+                description="Query real-time and historical crypto prices from Binance",
+                tags=["crypto", "binance", "price", "trading"],
+            )
+        ],
+        job_offerings=BINANCE_JOB_OFFERINGS,
+        job_resources=BINANCE_JOB_RESOURCES,
+        metadata={"mode": "push"},
+    )
+
+    print(f"  Mode:     PUSH (auto register on startup)")
+    print(f"  URL:      {endpoint_url}")
+    print(f"  Register: POST https://api.aip.unibase.com/agents/register")
+    print(f"  Auth:     Bearer token from config.json")
     print()
     server.run_sync()
 
 
 # ============================================================================
-# Example 3: POLLING Mode (private Agent, no public address needed)
+# Example 2: manual register (auto_register=False)
+# PUSH mode - public agent, step-by-step registration
 # ============================================================================
 
+def example_manual_register():
+    """
+    Start Binance Price Agent with manual registration (PUSH mode).
+
+    Auth + Registration flow:
+      - ensure_auth() → load token from config.json or interactive auth
+      - register_agent() → call POST /agents/register explicitly
+      - expose_as_a2a(..., auto_register=False) → skip duplicate registration
+    """
+    wallet, auth_token, public_url = _load_env()
+
+    print("\n===== Step 1: Authorization =====")
+    auth_token, resolved_wallet = ensure_auth()
+    if resolved_wallet:
+        wallet = resolved_wallet
+
+    handle = "binance_price_manual"
+    name = "Binance Price Agent (Manual)"
+    description = "Real-time cryptocurrency price queries via Binance public API"
+    endpoint_url = public_url
+
+    # Manual registration (step-by-step)
+    asyncio.run(
+        register_agent(
+            wallet=wallet,
+            auth_token=auth_token,
+            handle=handle,
+            name=name,
+            description=description,
+            endpoint_url=endpoint_url,
+            port=8201,
+        )
+    )
+
+    server = build_server(
+        wallet=wallet,
+        auth_token=auth_token,
+        handle=handle,
+        name=name,
+        description=description,
+        endpoint_url=endpoint_url,
+        port=8201,
+        polling=False,
+    )
+    server.run_sync()
+
+
+# ============================================================================
+# Example 3: auto register + POLLING mode (private agent)
+# ============================================================================
 
 def example_polling_mode():
     """
-    Start Binance Price Agent using Gateway POLLING mode (private Agent)
+    Start Binance Price Agent with auto registration (POLLING mode).
+
+    Agent has no public URL → polls Gateway every 3 seconds for tasks.
+    No public exposure needed.
     """
-    wallet = os.environ.get("MEMBASE_ACCOUNT", "0x5ea13664c5ce67753f208540d25B913788Aa3DaA")
+    wallet, auth_token, _ = _load_env()
+
+    print("\n===== Step 1: Authorization =====")
+    auth_token, resolved_wallet = ensure_auth()
+    if resolved_wallet:
+        wallet = resolved_wallet
+
+    handle = "binance_price_polling"
+    name = "Binance Price Agent (Polling)"
+    description = "Real-time cryptocurrency price queries via Binance (polling mode)"
+
+    print("\n===== Step 2: Agent Registration (auto, polling) =====")
+    print("  Mode: auto_register=True + endpoint_url=None (triggers polling)")
 
     agent = BinancePriceAgent()
 
+    print(f"\n{'='*70}")
+    print("Step 3: Start Agent Service (POLLING)")
+    print(f"{'='*70}")
+
     server = expose_as_a2a(
-        name="Binance Price Agent (Polling)",
+        name=name,
         handler=agent.handle,
         port=8202,
         host="0.0.0.0",
-        description="Real-time cryptocurrency price queries via Binance public API (polling mode)",
-
+        description=description,
         user_id=f"user:{wallet}",
         aip_endpoint="https://api.aip.unibase.com",
         gateway_url="http://gateway.aip.unibase.com",
-        handle="binance_price_polling",
-
+        handle=handle,
         auto_register=True,
-
-        # Key: endpoint_url=None triggers POLLING mode
         endpoint_url=None,
-
         cost_model=CostModel(base_call_fee=0.0),
         chain_id=97,
         skills=[
@@ -580,20 +815,17 @@ def example_polling_mode():
                 id="crypto.price",
                 name="Crypto Price Query",
                 description="Query real-time and historical crypto prices from Binance",
-                tags=["crypto", "binance", "price", "trading", "defi"],
-                examples=["BTCUSDT price", "ETH 24h change"],
-            ),
+                tags=["crypto", "binance", "price", "trading"],
+            )
         ],
         job_offerings=BINANCE_JOB_OFFERINGS,
         job_resources=BINANCE_JOB_RESOURCES,
-        metadata={
-            "author": "Unibase Demo",
-            "mode": "polling",
-        },
+        metadata={"mode": "polling"},
     )
 
-    print("Starting Binance Price Agent (POLLING mode - private Agent)...")
-    print("  No public URL needed. Agent polls Gateway every 3 seconds.")
+    print(f"  Mode:     POLLING (no public URL)")
+    print(f"  Gateway:  polls every 3 seconds")
+    print(f"  Register: POST https://api.aip.unibase.com/agents/register")
     print()
     print("  Chain:")
     print("    Agent → GET  /gateway/tasks/poll (every 3s)")
@@ -603,84 +835,65 @@ def example_polling_mode():
 
 
 # ============================================================================
-# Example 4: Fully Manual - POLLING mode + manual register
+# Example 4: manual register + POLLING mode (fully step-by-step)
 # ============================================================================
 
 def example_polling_manual():
-    """Fully manual POLLING mode Agent"""
-    wallet = os.environ.get("MEMBASE_ACCOUNT", "0x5ea13664c5ce67753f208540d25B913788Aa3DaA")
-    privy_token = os.environ.get("PRIVY_TOKEN")
+    """
+    Fully manual POLLING mode - step-by-step auth + registration + startup.
+    """
+    wallet, auth_token, _ = _load_env()
 
-    async def do_register():
-        async with AsyncAIPClient(base_url="https://api.aip.unibase.com") as client:
-            is_healthy = await client.health_check()
-            if not is_healthy:
-                raise RuntimeError("AIP platform unavailable")
-            print("  ✓ Platform healthy")
+    print("\n===== Step 1: Authorization =====")
+    auth_token, resolved_wallet = ensure_auth()
+    if resolved_wallet:
+        wallet = resolved_wallet
 
-            agent_config = AgentConfig(
-                name="Binance Price Agent (Polling Manual)",
-                handle="binance_price_polling_manual",
-                description="Real-time cryptocurrency price queries via Binance public API (polling mode)",
-                endpoint_url=None,
-                skills=[
-                    SkillConfig(
-                        skill_id="crypto.price",
-                        name="Crypto Price Query",
-                        description="Query real-time and historical crypto prices from Binance",
-                    )
-                ],
-                cost_model=CostModel(base_call_fee=0.0),
-                metadata={
-                    "chain_id": 97,
-                    "author": "Unibase Demo",
-                    "mode": "polling",
-                },
-                job_offerings=BINANCE_JOB_OFFERINGS,
-                job_resources=BINANCE_JOB_RESOURCES,
-            )
-            result = await client.register_agent(agent_config, user_id=wallet, privy_token=privy_token)
-            print(f"  ✓ Registered, Agent ID: {result.get('agent_id')}")
+    handle = "binance_price_polling_manual"
+    name = "Binance Price Agent (Polling Manual)"
+    description = "Real-time cryptocurrency price queries via Binance (polling, manual)"
 
-    print("\n===== Step 1: Manual Registration (POLLING mode) =====")
-    asyncio.run(do_register())
-
-    print("\n===== Step 2: Start Agent Service =====")
-
-    agent = BinancePriceAgent()
-
-    server = expose_as_a2a(
-        name="Binance Price Agent (Polling Manual)",
-        handler=agent.handle,
-        port=8203,
-        host="0.0.0.0",
-        user_id=f"user:{wallet}",
-        aip_endpoint="https://api.aip.unibase.com",
-        gateway_url="http://gateway.aip.unibase.com",
-        handle="binance_price_polling_manual",
-        auto_register=False,
-        endpoint_url=None,
-        cost_model=CostModel(base_call_fee=0.0),
-        chain_id=97,
-        skills=[
-            AgentSkillCard(
-                id="crypto.price",
-                name="Crypto Price Query",
-                description="Query real-time and historical crypto prices from Binance",
-                tags=["crypto", "binance", "price", "trading", "defi"],
-            ),
-        ],
-        job_offerings=BINANCE_JOB_OFFERINGS,
-        job_resources=BINANCE_JOB_RESOURCES,
-        metadata={
-            "author": "Unibase Demo",
-            "mode": "polling",
-        },
+    asyncio.run(
+        register_agent(
+            wallet=wallet,
+            auth_token=auth_token,
+            handle=handle,
+            name=name,
+            description=description,
+            endpoint_url=None,
+            port=8203,
+        )
     )
 
-    print("Starting Binance Price Agent (manual register + POLLING mode)...")
-    print()
+    server = build_server(
+        wallet=wallet,
+        auth_token=auth_token,
+        handle=handle,
+        name=name,
+        description=description,
+        endpoint_url=None,
+        port=8203,
+        polling=True,
+    )
     server.run_sync()
+
+
+# ============================================================================
+# Environment Helpers
+# ============================================================================
+
+def _load_env() -> tuple:
+    """Load standard env vars, return (wallet, auth_token, public_url)"""
+    wallet = os.environ.get(
+        "MEMBASE_ACCOUNT",
+        "0x5ea13664c5ce67753f208540d25b913788aa3daa"
+    )
+    auth_token = os.environ.get("UNIBASE_PROXY_AUTH", "")
+    public_url = os.environ.get(
+        "AGENT_PUBLIC_URL",
+        "http://your-public-ip:8200"
+    )
+    return wallet, auth_token, public_url
 
 
 # ============================================================================
@@ -708,30 +921,35 @@ if __name__ == "__main__":
 
     print(f"""
 ╔══════════════════════════════════════════════════════════════╗
-║           Agent SDK Startup Guide - Binance Price Agent    ║
+║        Agent SDK Startup Guide - Binance Price Agent       ║
+╠══════════════════════════════════════════════════════════════╣
+║  Auth:    Check config.json → interactive auth if missing  ║
+║  Register: POST /agents/register (Bearer token auth)        ║
+║  Chain:   BSC Testnet (chain_id=97)                         ║
 ╚══════════════════════════════════════════════════════════════╝
     """)
 
-    if args.mode == "auto":
-        print(">>> Mode: auto register + PUSH mode (public Agent)")
-        print(">>> Agent has public address, Gateway calls directly")
-        print()
-        example_auto_register()
+    try:
+        if args.mode == "auto":
+            print(">>> Mode: auto register + PUSH mode")
+            example_auto_register()
 
-    elif args.mode == "manual":
-        print(">>> Mode: manual register + PUSH mode (public Agent)")
-        print(">>> Step-by-step control: register first, then start")
-        print()
-        example_manual_register()
+        elif args.mode == "manual":
+            print(">>> Mode: manual register + PUSH mode")
+            example_manual_register()
 
-    elif args.mode == "polling":
-        print(">>> Mode: auto register + POLLING mode (private Agent)")
-        print(">>> Agent has no public address, polls Gateway for tasks")
-        print()
-        example_polling_mode()
+        elif args.mode == "polling":
+            print(">>> Mode: auto register + POLLING mode (private Agent)")
+            example_polling_mode()
 
-    elif args.mode == "polling-manual":
-        print(">>> Mode: manual register + POLLING mode (private Agent)")
-        print(">>> Full manual control, no public dependency")
-        print()
-        example_polling_manual()
+        elif args.mode == "polling-manual":
+            print(">>> Mode: manual register + POLLING mode (private Agent)")
+            example_polling_manual()
+
+    except KeyboardInterrupt:
+        print("\n\nAgent shutdown requested.")
+    except Exception as e:
+        print(f"\n\n✗ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
