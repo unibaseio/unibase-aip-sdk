@@ -185,12 +185,31 @@ def load_auth_token() -> str | None:
         return None
 
 
-def save_auth_token(token: str) -> None:
-    """Save UNIBASE_PROXY_AUTH to config.json"""
+def save_auth_token(token: str, agent_id: str | None = None, agent_wallet: str | None = None) -> None:
+    """Save UNIBASE_PROXY_AUTH and optional agent identity to config.json"""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    data = {"UNIBASE_PROXY_AUTH": token}
+    if agent_id:
+        data["AGENT_ID"] = agent_id
+    if agent_wallet:
+        data["AGENT_WALLET"] = agent_wallet
     with open(CONFIG_FILE, "w") as f:
-        json.dump({"UNIBASE_PROXY_AUTH": token}, f, indent=2)
+        json.dump(data, f, indent=2)
     print(f"  ✓ Saved auth token to {CONFIG_FILE}")
+
+
+def load_agent_identity() -> tuple[str | None, str | None]:
+    """Load persisted agent_id and agent_wallet from config.json.
+
+    Returns:
+        (agent_id, agent_wallet) - either or both may be None if not saved.
+    """
+    try:
+        with open(CONFIG_FILE) as f:
+            cfg = json.load(f)
+        return cfg.get("AGENT_ID"), cfg.get("AGENT_WALLET")
+    except (json.JSONDecodeError, IOError):
+        return None, None
 
 
 def extract_wallet_from_token(token: str) -> str | None:
@@ -567,9 +586,13 @@ async def register_agent(
     description: str,
     endpoint_url: str | None,
     port: int,
+    existing_agent_id: str | None = None,
 ) -> str:
     """
     Register agent via POST /agents/register (Bearer auth).
+
+    Pass existing_agent_id to reuse an existing registration (avoids creating
+    a new ERC-8004 token on agent restart).
 
     Returns agent_id on success.
     """
@@ -579,6 +602,8 @@ async def register_agent(
     print(f"  Endpoint: https://api.aip.unibase.com/agents/register")
     print(f"  Wallet:   {wallet}")
     print(f"  Handle:   {handle}")
+    if existing_agent_id:
+        print(f"  Existing ID: {existing_agent_id} (will reuse)")
 
     async with AsyncAIPClient(base_url="https://api.aip.unibase.com") as client:
         is_healthy = await client.health_check()
@@ -605,6 +630,8 @@ async def register_agent(
             },
             job_offerings=BINANCE_JOB_OFFERINGS,
             job_resources=BINANCE_JOB_RESOURCES,
+            # Pass existing_agent_id so server returns the same token on restart
+            agent_id=existing_agent_id,
         )
 
         result = await client.register_agent(
@@ -613,7 +640,15 @@ async def register_agent(
             privy_token=auth_token,
         )
         agent_id = result.get("agent_id")
+        agent_wallet = None
+        if result.get("onchain_registration"):
+            agent_wallet = result["onchain_registration"].get("agent_wallet")
         print(f"  ✓ Registered. Agent ID: {agent_id}")
+        if agent_wallet:
+            print(f"  ✓ Agent Wallet: {agent_wallet}")
+
+        # Persist identity so subsequent starts reuse the same token
+        save_auth_token(auth_token, agent_id=agent_id, agent_wallet=agent_wallet)
         return agent_id
 
 
@@ -790,7 +825,11 @@ def example_manual_register():
     description = "Real-time cryptocurrency price queries via Binance public API"
     endpoint_url = public_url
 
+    # Load persisted agent identity (reuses existing token on restart)
+    existing_agent_id, existing_agent_wallet = load_agent_identity()
+
     # Manual registration (step-by-step)
+    # Pass existing_agent_id so server returns the same token instead of creating a new one
     asyncio.run(
         register_agent(
             wallet=wallet,
@@ -800,6 +839,7 @@ def example_manual_register():
             description=description,
             endpoint_url=endpoint_url,
             port=8201,
+            existing_agent_id=existing_agent_id,
         )
     )
 
@@ -834,8 +874,8 @@ def example_polling_mode():
     if resolved_wallet:
         wallet = resolved_wallet
 
-    handle = "binance_price_polling"
-    name = "Binance Price Agent (Polling)"
+    handle = "binance_spot"
+    name = "Binance Spot"
     description = "Real-time cryptocurrency price queries via Binance (polling mode)"
 
     print("\n===== Step 2: Agent Registration (auto, polling) =====")
