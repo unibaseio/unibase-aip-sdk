@@ -1090,9 +1090,16 @@ class A2AServer:
             job_input = job_data.get("job_input", "")
 
             # Build a task-like structure for the handler
+            # Message requires messageId and role per A2A spec
             rpc_request = {
                 "method": payload.get("method", "message/send"),
-                "params": {"message": {"parts": [{"kind": "text", "text": job_input}]}},
+                "params": {
+                    "message": {
+                        "messageId": str(uuid.uuid4()),
+                        "role": "user",
+                        "parts": [{"kind": "text", "text": job_input}],
+                    }
+                },
                 "id": job_id,
             }
 
