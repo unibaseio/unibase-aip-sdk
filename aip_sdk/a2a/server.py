@@ -1023,6 +1023,12 @@ class A2AServer:
         config = self.registration_config
         gateway_url = config.get("gateway_url")
         handle = config.get("handle")
+        # Use the registered agent_id (e.g. "97:0x8004...:578") if available,
+        # falling back to handle (e.g. "binance_price_polling").
+        # This is critical for ERC-8183 job queue: Butler submits with the
+        # chain-scoped agent_id, so the SDK must poll with the same ID so the
+        # gateway's _handle_from_agent_id() extracts the same token ID.
+        agent_id_for_poll = self._agent_id or handle
         poll_interval = 3.0
 
         # Decide polling mode based on job_offerings or via_gateway flag
@@ -1033,7 +1039,7 @@ class A2AServer:
         if use_job_queue:
             poll_endpoint = f"{gateway_url}/gateway/jobs/poll"
             complete_endpoint = f"{gateway_url}/gateway/jobs/complete"
-            logger.info(f"Starting Gateway JOB-QUEUE polling loop for agent {handle}")
+            logger.info(f"Starting Gateway JOB-QUEUE polling loop for agent {agent_id_for_poll}")
             logger.info(f"  (job_offerings={has_job_offerings}, via_gateway={via_gateway})")
         else:
             poll_endpoint = f"{gateway_url}/gateway/tasks/poll"
@@ -1046,7 +1052,7 @@ class A2AServer:
                     if use_job_queue:
                         response = await client.get(
                             poll_endpoint,
-                            params={"agent": handle, "timeout": 5.0}
+                            params={"agent": agent_id_for_poll, "timeout": 5.0}
                         )
                     else:
                         response = await client.get(

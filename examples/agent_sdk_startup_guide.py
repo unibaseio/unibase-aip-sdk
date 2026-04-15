@@ -785,8 +785,8 @@ def example_manual_register():
     if resolved_wallet:
         wallet = resolved_wallet
 
-    handle = "binance_price_manual"
-    name = "Binance Price Agent (Manual)"
+    handle = "binance_spot"
+    name = "Binance Spot"
     description = "Real-time cryptocurrency price queries via Binance public API"
     endpoint_url = public_url
 
