@@ -1104,15 +1104,21 @@ class A2AServer:
             }
 
             # Call the agent handler
-            result = await self._handle_jsonrpc(rpc_request, rpc_request["id"])
+            rpc_response = await self._handle_jsonrpc(rpc_request, rpc_request["id"])
+
+            # _handle_jsonrpc returns: {"jsonrpc": "2.0", "id": ..., "result": task_dict}
+            # Extract the actual task dict from the jsonrpc response.
+            task_dict = rpc_response.get("result", {})
+            if isinstance(task_dict, dict) and "error" in task_dict:
+                task_dict = {}
 
             # Extract readable text from the serialized task's history.
-            # result["history"] is a list of A2A Message dicts with fields:
+            # task_dict["history"] is a list of A2A Message dicts with fields:
             #   messageId, role, parts, kind
             # parts[0] for role="agent" contains {"kind": "text", "text": "BTC $X"}
             agent_text = ""
             try:
-                history = result.get("history", [])
+                history = task_dict.get("history", [])
                 for msg in history:
                     if msg.get("role") == "agent":
                         parts = msg.get("parts", [])
@@ -1126,7 +1132,7 @@ class A2AServer:
             # Butler reads metadata.result.response — also include full task for debug.
             result_payload = {
                 "response": agent_text,
-                "task": result,
+                "task": task_dict,
             }
 
             # Submit result back to Gateway job queue
