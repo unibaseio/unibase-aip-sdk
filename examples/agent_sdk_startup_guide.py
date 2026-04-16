@@ -542,15 +542,8 @@ BINANCE_JOB_OFFERINGS = [
         },
         job_input="Text query: '<SYMBOL> price' | '<SYMBOL> 24h change' | '<SYMBOL> klines <N>' | '<SYMBOL> orderbook'. Example: 'BTCUSDT price' or 'ETH 24h change'",
         job_output="Text or JSON with price data, 24h stats, klines, or orderbook",
-        requirement={
-            "input_modes": ["text/plain"],
-            "output_modes": ["text/plain", "application/json"],
-            "timeout_seconds": 30,
-        },
-        deliverable={
-            "type": "data",
-            "description": "Real-time or historical price data from Binance",
-        },
+        requirement={"type": "object", "required": ["ticker"], "properties": {"ticker": {"type": "string", "description": "ticker"}}},
+        deliverable={"type": "object", "required": ["text"], "properties": {"text": {"type": "string", "description": "Complete deliverable"}}},
         sla_minutes=1,
         required_funds=False,
         restricted=False,
