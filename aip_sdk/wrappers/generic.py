@@ -24,7 +24,15 @@ from a2a.types import (
     Role,
     Task,
 )
-from aip_sdk.types import AgentCard, AgentSkillCard, AgentCapabilities, AgentProvider, AgentService
+from aip_sdk.types import (
+    AgentCard, 
+    AgentSkillCard, 
+    AgentCapabilities, 
+    AgentProvider, 
+    AgentService,
+    AgentJobOffering,
+    AgentJobResource
+)
 from a2a.utils.message import get_message_text
 from a2a.client.helpers import create_text_message_object
 
@@ -219,16 +227,22 @@ def expose_as_a2a(
     version: str = "1.0.0",
     # Account integration
     user_id: str = None,
+    privy_token: str = None,
     aip_endpoint: str = None,
     gateway_url: str = None,
     handle: str = None,
     auto_register: bool = True,
+    # Whether this agent should be callable via the gateway (Butler can discover it)
+    # When True, adds "via_gateway": true to metadata so Butler can route calls through gateway
+    via_gateway: bool = False,
     # Pricing via cost_model
     cost_model: CostModel = None,
     currency: str = "USD",
     endpoint_url: str = None,
     metadata: Dict[str, Any] = None,
     chain_id: int = 97,
+    job_offerings: List[AgentJobOffering] = None,
+    job_resources: List[AgentJobResource] = None,
     **kwargs,
 ) -> A2AServer:
     """Expose ANY callable as an A2A-compatible agent service.
@@ -243,13 +257,17 @@ def expose_as_a2a(
         streaming: Enable streaming responses
         raw_response: If True, handler output is sent directly as SSE data without JSON-RPC wrapping
         version: Agent version string
-        user_id: AIP platform user ID for registration
+        user_id: User wallet address (for on-chain ERC-8004 registration)
+        privy_token: Privy Bearer Token for authentication (auto-reads PRIVY_TOKEN env if not set)
         aip_endpoint: AIP platform endpoint URL
         handle: Agent handle (auto-generated from name if not provided)
-        auto_register: Whether to auto-register with AIP platform
+        auto_register: Whether to auto-register with AIP platform (POST /agents/register)
+        via_gateway: If True, adds "via_gateway": true to metadata so Butler can
+            discover and route calls to this agent via the gateway job queue.
+            Recommended for local/private agents that want to be hired via the marketplace.
         cost_model: Pricing model (use CostModel(base_call_fee=0.05) for $0.05/call)
         currency: Currency for pricing (default: USD)
-        chain_id: Target blockchain ID for registration (default: 97)
+        chain_id: Target blockchain ID for registration (default: 97, BSC Testnet)
         **kwargs: Additional arguments passed to AgentCard
 
     Returns:
@@ -313,8 +331,14 @@ def expose_as_a2a(
     # Config is needed for both registration AND Gateway polling
     registration_config = None
     if resolved_user_id and (auto_register or gateway_url):
+        # Merge via_gateway into metadata
+        merged_metadata = dict(metadata or {})
+        if via_gateway:
+            merged_metadata["via_gateway"] = True
+
         registration_config = {
             "user_id": resolved_user_id,
+            "privy_token": privy_token or os.getenv("PRIVY_TOKEN"),
             "aip_endpoint": resolved_aip_endpoint,
             "gateway_url": gateway_url,
             "handle": handle,
@@ -324,8 +348,11 @@ def expose_as_a2a(
             "cost_model": resolved_cost_model.to_dict(),
             "currency": currency,
             "endpoint_url": endpoint_url,
-            "metadata": metadata or {},
+            "metadata": merged_metadata,
             "chain_id": chain_id,
+            "job_offerings": job_offerings or [],
+            "job_resources": job_resources or [],
+            "via_gateway": via_gateway,
         }
 
     # Create and return server
@@ -353,6 +380,8 @@ class AgentWrapper:
         version: str = "1.0.0",
         endpoint_url: str = None,
         metadata: Dict[str, Any] = None,
+        job_offerings: List[AgentJobOffering] = None,
+        job_resources: List[AgentJobResource] = None,
     ):
         """Initialize agent wrapper."""
         self.agent = agent
@@ -361,6 +390,8 @@ class AgentWrapper:
         self.version = version
         self.endpoint_url = endpoint_url
         self.metadata = metadata or {}
+        self.job_offerings = job_offerings or []
+        self.job_resources = job_resources or []
 
         if method and skill_methods:
             raise ValueError("Cannot specify both 'method' and 'skill_methods'")
@@ -483,6 +514,8 @@ class AgentWrapper:
             defaultInputModes=["text/plain", "application/json"],
             defaultOutputModes=["text/plain", "application/json"],
             metadata=self.metadata,
+            jobOfferings=self.job_offerings,
+            jobResources=self.job_resources,
         )
 
         return A2AServer(

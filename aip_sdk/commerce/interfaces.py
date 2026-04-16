@@ -52,28 +52,42 @@ class JobRecord:
 class BaseMarketDriver:
     """Abstract interface for all commerce drivers (on-chain or mock)."""
 
-    async def create_job(self, spec: JobSpec) -> str:
+    async def create_job(self, spec: JobSpec, signer_account: Any = None) -> str:
         raise NotImplementedError
 
-    async def accept_job(self, job_id: str, provider_id: str, chain_id: Optional[int] = None) -> bool:
+    async def accept_job(self, job_id: str, provider_id: str, chain_id: Optional[int] = None, signer_account: Any = None) -> bool:
         raise NotImplementedError
 
     async def submit_deliverable(
-        self, job_id: str, provider_id: str, deliverable_hash: str, deliverable_uri: str, chain_id: Optional[int] = None
+        self,
+        job_id: str,
+        provider_id: str,
+        deliverable_hash: str,
+        deliverable_uri: str,
+        chain_id: Optional[int] = None,
+        signer_account: Any = None,
     ) -> bool:
         raise NotImplementedError
 
     async def complete_job(
-        self, job_id: str, evaluator_id: str, reason_hash: str, chain_id: Optional[int] = None
+        self,
+        job_id: str,
+        evaluator_id: str,
+        reason_hash: str,
+        chain_id: Optional[int] = None,
+        signer_account: Any = None,
     ) -> bool:
         raise NotImplementedError
 
     async def reject_job(
-        self, job_id: str, rejector_id: str, reason_hash: str, chain_id: Optional[int] = None
+        self, job_id: str, rejector_id: str, reason_hash: str, chain_id: Optional[int] = None, signer_account: Any = None
     ) -> bool:
         raise NotImplementedError
 
-    async def set_budget(self, job_id: str, amount: float, chain_id: Optional[int] = None) -> bool:
+    async def set_budget(self, job_id: str, amount: float, chain_id: Optional[int] = None, reward_token: str = "native", signer_account: Any = None) -> bool:
+        raise NotImplementedError
+
+    async def fund_job(self, job_id: str, amount: float, chain_id: Optional[int] = None, signer_account: Any = None) -> bool:
         raise NotImplementedError
 
     async def get_job(self, job_id: str, chain_id: Optional[int] = None) -> Optional[JobRecord]:

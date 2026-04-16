@@ -171,34 +171,50 @@ class AsyncAIPClient:
 
     async def register_agent(
         self,
-        user_id: str,
         agent: Union[AgentConfig, Dict[str, Any]],
+        *,
+        user_id: str = None,
+        privy_token: str = None,
     ) -> Dict[str, Any]:
-        """Register an agent for a specific user."""
+        """Register an agent with AIP platform.
+
+        Uses POST /agents/register (Privy Token auth).
+        Authorization: Bearer {privy_token}
+
+        Args:
+            agent: Agent configuration (AgentConfig or dict)
+            user_id: User wallet address (for on-chain ERC-8004 registration)
+            privy_token: Privy Bearer token for authentication
+        """
         if isinstance(agent, AgentConfig):
             reg_data = agent.to_registration_dict()
         else:
-            reg_data = agent
+            reg_data = dict(agent)
 
-        # IMPORTANT: Add user_id to payload for blockchain registration
-        reg_data["user_id"] = user_id
+        # Add user_id to payload for blockchain registration
+        # When privy_token is provided, the server derives user_id from the Bearer token
+        # (resolving through agent→owner chain). We must NOT pass user_id in the body
+        # because the SDK's user_id (from JWT sub) may differ from the server-resolved
+        # owner, causing a 401 "Authenticated user does not match" error.
+        if user_id and not privy_token:
+            reg_data["user_id"] = user_id
 
-        # Debug: log the registration payload
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"[BLOCKCHAIN DEBUG] Registering agent with payload containing user_id: {user_id}")
-        logger.info(f"[BLOCKCHAIN DEBUG] Full payload keys: {list(reg_data.keys())}")
+        # Build headers (Bearer token auth)
+        headers = {}
+        if privy_token:
+            headers["Authorization"] = f"Bearer {privy_token}"
 
         try:
             response = await self.client.post(
-                f"/users/{user_id}/agents/register",
+                "/agents/register",
                 json=reg_data,
+                headers=headers if headers else None,
             )
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as e:
             raise RegistrationError(
-                f"Failed to register agent for user {user_id}: {e}",
+                f"Failed to register agent: {e}",
                 handle=reg_data.get("handle"),
             )
 
@@ -680,11 +696,13 @@ class AIPClient:
 
     def register_agent(
         self,
-        user_id: str,
         agent: Union[AgentConfig, Dict[str, Any]],
+        *,
+        user_id: str = None,
+        privy_token: str = None,
     ) -> Dict[str, Any]:
-        """Register an agent for a specific user."""
-        return self._run(self._async_client.register_agent(user_id, agent))
+        """Register an agent with AIP platform (sync wrapper)."""
+        return self._run(self._async_client.register_agent(agent, user_id=user_id, privy_token=privy_token))
 
     def unregister_agent(
         self,

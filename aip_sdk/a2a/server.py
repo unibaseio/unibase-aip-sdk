@@ -117,9 +117,14 @@ class A2AServer:
                 gateway_url = self.registration_config.get("gateway_url")
 
                 if endpoint_url is None and gateway_url:
-                    logger.info(f"Starting Gateway polling mode (private agent)")
+                    has_job_offerings = bool(self.registration_config.get("job_offerings"))
+                    via_gateway = self.registration_config.get("via_gateway", False)
+                    use_job_queue = has_job_offerings or via_gateway
+                    mode = "JOB-QUEUE" if use_job_queue else "TASK-QUEUE"
+                    logger.info(f"Starting Gateway polling mode (private agent, {mode})")
                     logger.info(f"  Gateway URL: {gateway_url}")
                     logger.info(f"  Agent Handle: {self.registration_config.get('handle')}")
+                    logger.info(f"  job_offerings: {has_job_offerings}, via_gateway: {via_gateway}")
                     self._should_poll = True
                     self._polling_task = asyncio.create_task(self._gateway_polling_loop())
 
@@ -661,6 +666,9 @@ class A2AServer:
         try:
             history = list(task.history or [])
             artifacts = list(task.artifacts or [])
+            
+            accumulated_content = []
+            initial_history_len = len(history)
 
             async for response in self.task_handler(task, message):
                 if response.message:
@@ -676,6 +684,39 @@ class A2AServer:
                     )
                 if response.artifact_update:
                     artifacts.append(response.artifact_update.artifact)
+                
+                # Accumulate raw content to synthesize message at the end
+                if response.raw_content:
+                    try:
+                        line = response.raw_content.strip()
+                        if line.startswith("data:"):
+                            content = line[5:].strip()
+                            if content.startswith('"') and content.endswith('"'):
+                                content = json.loads(content)
+                            elif content.startswith("{") and content.endswith("}"):
+                                try:
+                                    json_data = json.loads(content)
+                                    if isinstance(json_data, dict):
+                                        if "delta" in json_data:
+                                            content = json_data["delta"]
+                                        elif "text" in json_data:
+                                            content = json_data["text"]
+                                        elif "choices" in json_data and isinstance(json_data["choices"], list):
+                                            delta = json_data["choices"][0].get("delta", {})
+                                            if "content" in delta:
+                                                content = delta["content"]
+                                except:
+                                    pass
+                            if isinstance(content, str):
+                                accumulated_content.append(content)
+                    except Exception:
+                        pass
+                        
+            if accumulated_content and len(history) == initial_history_len:
+                full_text = "".join(accumulated_content)
+                if full_text:
+                    agent_msg = create_text_message_object(Role.agent, full_text)
+                    history.append(agent_msg)
 
             # Mark as completed if not already in terminal state
             final_state = task.status.state
@@ -898,9 +939,10 @@ class A2AServer:
             return
 
         config = self.registration_config
-        user_id = config["user_id"]
-        aip_endpoint = config["aip_endpoint"]
-        handle = config["handle"]
+        user_id = config.get("user_id")
+        privy_token = config.get("privy_token")
+        aip_endpoint = config.get("aip_endpoint", get_default_aip_endpoint())
+        handle = config.get("handle")
 
         logger.info(f"[DEBUG] Registration config endpoint_url: {config.get('endpoint_url')}")
         logger.info(f"Registering agent with AIP platform at {aip_endpoint}")
@@ -931,6 +973,14 @@ class A2AServer:
             # - endpoint_url=<URL>: push mode (public agent)
             endpoint_url = config.get("endpoint_url")
 
+            from aip_sdk.types import AgentJobOffering, AgentJobResource
+            
+            job_offerings_raw = config.get("job_offerings", [])
+            job_offerings = [AgentJobOffering.model_validate(j) for j in job_offerings_raw]
+            
+            job_resources_raw = config.get("job_resources", [])
+            job_resources = [AgentJobResource.model_validate(r) for r in job_resources_raw]
+
             agent_config = AgentConfig(
                 name=config["name"],
                 handle=handle,
@@ -940,10 +990,13 @@ class A2AServer:
                 cost_model=cost_model,
                 currency=config.get("currency", "USD"),
                 metadata=config.get("metadata", {}),
+                job_offerings=job_offerings,
+                job_resources=job_resources,
+                chain_id=config.get("chain_id", 97),
             )
 
-            # Register with platform
-            result = await self._aip_client.register_agent(user_id, agent_config)
+            # Register with platform (uses POST /agents/register)
+            result = await self._aip_client.register_agent(agent_config, user_id=user_id, privy_token=privy_token)
             self._agent_id = result.get("agent_id", f"erc8004:{handle}")
 
             logger.info(f"Agent registered successfully: {self._agent_id}")
@@ -953,7 +1006,14 @@ class A2AServer:
             # Don't fail startup - agent can still work without platform registration
 
     async def _gateway_polling_loop(self):
-        """Poll Gateway for tasks (for private agents behind firewall)."""
+        """Poll Gateway for tasks or job assignments (for private agents behind firewall).
+
+        Two modes:
+        - Job queue mode: agent has job_offerings or via_gateway=True
+          → polls GET /gateway/jobs/poll, submits to POST /gateway/jobs/complete
+        - Task queue mode: agent has no job_offerings
+          → polls GET /gateway/tasks/poll, submits to POST /gateway/tasks/complete
+        """
         try:
             import httpx
         except ImportError:
@@ -963,33 +1023,56 @@ class A2AServer:
         config = self.registration_config
         gateway_url = config.get("gateway_url")
         handle = config.get("handle")
-        poll_interval = 3.0  # Poll every 3 seconds
+        # Use the registered agent_id (e.g. "97:0x8004...:578") if available,
+        # falling back to handle (e.g. "binance_price_polling").
+        # This is critical for ERC-8183 job queue: Butler submits with the
+        # chain-scoped agent_id, so the SDK must poll with the same ID so the
+        # gateway's _handle_from_agent_id() extracts the same token ID.
+        agent_id_for_poll = self._agent_id or handle
+        poll_interval = 3.0
 
-        logger.info(f"Starting Gateway polling loop for agent {handle}")
+        # Decide polling mode based on job_offerings or via_gateway flag
+        has_job_offerings = bool(config.get("job_offerings"))
+        via_gateway = config.get("via_gateway", False)
+        use_job_queue = has_job_offerings or via_gateway
+
+        if use_job_queue:
+            poll_endpoint = f"{gateway_url}/gateway/jobs/poll"
+            complete_endpoint = f"{gateway_url}/gateway/jobs/complete"
+            logger.info(f"Starting Gateway JOB-QUEUE polling loop for agent {agent_id_for_poll}")
+            logger.info(f"  (job_offerings={has_job_offerings}, via_gateway={via_gateway})")
+        else:
+            poll_endpoint = f"{gateway_url}/gateway/tasks/poll"
+            complete_endpoint = f"{gateway_url}/gateway/tasks/complete"
+            logger.info(f"Starting Gateway TASK-QUEUE polling loop for agent {handle}")
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             while self._should_poll:
                 try:
-                    # Poll for tasks
-                    response = await client.get(
-                        f"{gateway_url}/gateway/tasks/poll",
-                        params={"agent": handle, "timeout": 5.0}
-                    )
+                    if use_job_queue:
+                        response = await client.get(
+                            poll_endpoint,
+                            params={"agent": agent_id_for_poll, "timeout": 5.0}
+                        )
+                    else:
+                        response = await client.get(
+                            poll_endpoint,
+                            params={"agent": handle, "timeout": 5.0}
+                        )
 
                     if response.status_code == 200:
-                        task_data = response.json()
-                        task_id = task_data.get("task_id")
+                        data = response.json()
+                        task_id = data.get("task_id") or data.get("job_id")
 
                         if task_id:
-                            logger.info(f"Received task {task_id} from Gateway")
-
-                            # Process the task
-                            await self._process_gateway_task(task_id, task_data, gateway_url, client)
+                            logger.info(f"Received assignment {task_id} from Gateway (job_queue={use_job_queue})")
+                            if use_job_queue:
+                                await self._process_gateway_job(task_id, data, gateway_url, client, complete_endpoint)
+                            else:
+                                await self._process_gateway_task(task_id, data, gateway_url, client)
                         else:
-                            # No task available
                             await asyncio.sleep(poll_interval)
                     else:
-                        # Poll failed, wait and retry
                         logger.debug(f"Poll returned {response.status_code}, retrying...")
                         await asyncio.sleep(poll_interval)
 
@@ -998,6 +1081,88 @@ class A2AServer:
                     await asyncio.sleep(poll_interval)
 
         logger.info("Gateway polling loop stopped")
+
+    async def _process_gateway_job(self, job_id: str, job_data: Dict, gateway_url: str, client, complete_endpoint: str):
+        """Process a job assignment received from the job queue."""
+        try:
+            # Extract the actual work from job_data
+            payload = job_data.get("payload", {})
+            job_input = job_data.get("job_input", "")
+
+            # Build a task-like structure for the handler
+            # Message requires messageId and role per A2A spec
+            rpc_request = {
+                "method": payload.get("method", "message/send"),
+                "params": {
+                    "message": {
+                        "messageId": str(uuid.uuid4()),
+                        "role": "user",
+                        "parts": [{"kind": "text", "text": job_input}],
+                    }
+                },
+                "id": job_id,
+            }
+
+            # Call the agent handler
+            rpc_response = await self._handle_jsonrpc(rpc_request, rpc_request["id"])
+
+            # _handle_jsonrpc returns: {"jsonrpc": "2.0", "id": ..., "result": task_dict}
+            # Extract the actual task dict from the jsonrpc response.
+            task_dict = rpc_response.get("result", {})
+            if isinstance(task_dict, dict) and "error" in task_dict:
+                task_dict = {}
+
+            # Extract readable text from the serialized task's history.
+            # task_dict["history"] is a list of A2A Message dicts with fields:
+            #   messageId, role, parts, kind
+            # parts[0] for role="agent" contains {"kind": "text", "text": "BTC $X"}
+            agent_text = ""
+            try:
+                history = task_dict.get("history", [])
+                for msg in history:
+                    if msg.get("role") == "agent":
+                        parts = msg.get("parts", [])
+                        if parts and parts[0].get("kind") == "text":
+                            agent_text = parts[0].get("text", "")
+                            break
+            except Exception:
+                pass
+
+            # Build structured result so Butler can extract response text easily.
+            # Butler reads metadata.result.response — also include full task for debug.
+            result_payload = {
+                "response": agent_text,
+                "task": task_dict,
+            }
+
+            # Submit result back to Gateway job queue
+            await client.post(
+                complete_endpoint,
+                json={
+                    "job_id": job_id,
+                    "agent_id": job_data.get("agent_id"),
+                    "result": result_payload,
+                    "status": "completed",
+                }
+            )
+
+            logger.info(f"Job {job_id} completed and result submitted to job queue")
+
+        except Exception as e:
+            logger.error(f"Error processing job {job_id}: {e}")
+            try:
+                await client.post(
+                    complete_endpoint,
+                    json={
+                        "job_id": job_id,
+                        "agent_id": job_data.get("agent_id"),
+                        "result": {},
+                        "status": "failed",
+                        "error": str(e),
+                    }
+                )
+            except Exception:
+                pass
 
     async def _process_gateway_task(self, task_id: str, task_data: Dict, gateway_url: str, client):
         """Process a task received from Gateway."""

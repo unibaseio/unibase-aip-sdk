@@ -223,6 +223,37 @@ class AgentSkillCard(BaseModel):
     inputModes: List[str] = Field(default=["text/plain"])
     outputModes: List[str] = Field(default=["application/json"])
 
+class AgentJobOffering(BaseModel):
+    """A structured job offering as defined in an Agent Card (Virtuals ACP compatible)."""
+    id: int | str
+    name: str
+    description: str = ""
+    type: str = "JOB"
+    price: float = 0.0
+    price_v2: Optional[Dict[str, Any]] = Field(None, alias="priceV2")
+    job_input: Optional[str] = Field(None, alias="jobInput")
+    job_output: Optional[str] = Field(None, alias="jobOutput")
+    requirement: Optional[Dict[str, Any]] = None
+    deliverable: Optional[Dict[str, Any]] = None
+    sla_minutes: int = Field(0, alias="slaMinutes")
+    required_funds: bool = Field(False, alias="requiredFunds")
+    is_managed_fund: bool = Field(False, alias="isManagedFund")
+    restricted: bool = False
+    hide: bool = False
+    active: bool = True
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+class AgentJobResource(BaseModel):
+    """An auxiliary read-only resource defined in an Agent Card."""
+    id: int | str
+    url: str
+    name: str
+    type: str = "RESOURCE"
+    description: str = ""
+
+    model_config = ConfigDict(extra="allow")
+
 class AgentCard(BaseModel):
     """
     Standard Agent Card strictly following the ERC-8004 specification.
@@ -265,6 +296,8 @@ class AgentCard(BaseModel):
     
     # Agent Capabilities
     skills: List[AgentSkillCard] = Field(default_factory=list)
+    jobOfferings: List[AgentJobOffering] = Field(default_factory=list)
+    jobResources: List[AgentJobResource] = Field(default_factory=list)
     trustModels: List[str] = Field(default_factory=lambda: ["feedback", "inference-validation", "tee-attestation"])
 
     model_config = ConfigDict(populate_by_name=True)
@@ -282,6 +315,9 @@ class AgentConfig(BaseModel):
     currency: str = "USD"
     metadata: Dict[str, Any] = Field(default_factory=dict)
     endpoint_url: Optional[str] = None
+    job_offerings: List[AgentJobOffering] = Field(default_factory=list)
+    job_resources: List[AgentJobResource] = Field(default_factory=list)
+    chain_id: Optional[int] = Field(97, description="Target blockchain ID for on-chain ERC-8004 registration (default: 97)")
 
     @property
     def price(self) -> float:
@@ -323,6 +359,8 @@ class AgentConfig(BaseModel):
                 AgentRegistration(agentId=agent_id, agentRegistry=registry_address)
             ] if registry_address else [],
             skills=skill_cards,
+            jobOfferings=self.job_offerings,
+            jobResources=self.job_resources,
             metadata=self.metadata,
             provider=AgentProvider(organization="BitAgent", url="https://bitagent.io"),
         )
@@ -343,8 +381,11 @@ class AgentConfig(BaseModel):
                 "amount": self.price,
                 "currency": self.currency,
             },
+            "jobOfferings": [j.model_dump(by_alias=True) for j in self.job_offerings],
+            "jobResources": [r.model_dump(by_alias=True) for r in self.job_resources],
             "metadata": self.metadata,
             "endpoint_url": self.endpoint_url,
+            "chain_id": self.chain_id,
         }
 
 
@@ -428,6 +469,8 @@ class AgentContext:
         memory_write: Callable[[str, Dict[str, Any], str], None],
         submit_commerce_work: Optional[Callable[[str, Any, str, Optional[int]], Awaitable[bool]]] = None,
         list_agents: Optional[Callable[[], Awaitable[List[Any]]]] = None,
+        invoke_a2a_agent: Optional[Callable[[str, Any, str], Awaitable[TaskResult]]] = None,
+        search_job_offerings: Optional[Callable[[str, Optional[int], bool], Awaitable[List[Any]]]] = None,
     ):
         self.invoke_agent = invoke_agent
         self.emit_event = emit_event
@@ -437,6 +480,18 @@ class AgentContext:
         self.memory_write = memory_write
         self._submit_commerce_work = submit_commerce_work
         self._list_agents = list_agents
+        self.invoke_a2a_agent = invoke_a2a_agent
+        self._search_job_offerings = search_job_offerings
+
+    async def search_job_offerings(self, query: str, chain_id: Optional[int] = None, onchain_only: bool = False) -> List[Any]:
+        """Search for structured job offerings across the registry."""
+        if self._search_job_offerings:
+            import inspect
+            res = self._search_job_offerings(query, chain_id, onchain_only)
+            if inspect.isawaitable(res):
+                return await res
+            return res
+        return []
 
     async def list_agents(self, filter_query: Optional[str] = None) -> List[Any]:
         """List and search agents in the registry.
@@ -515,6 +570,26 @@ class AgentContext:
             payload=payload,
             reason=reason,
         )
+
+    async def call_a2a_agent(
+        self,
+        agent_id: str,
+        task_name: str,
+        payload: Dict[str, Any],
+        reason: str = "",
+    ) -> TaskResult:
+        """Call another agent directly via A2A protocol (if supported)."""
+        from uuid import uuid4
+
+        task = Task(
+            task_id=str(uuid4()),
+            name=task_name,
+            description=reason or f"Direct A2A call to {agent_id}",
+            payload=payload,
+        )
+        if self.invoke_a2a_agent:
+            return await self.invoke_a2a_agent(agent_id, task, reason)
+        return await self.invoke_agent(agent_id, task, reason)
 
     async def log(self, event_type: str, **data: Any) -> None:
         """Log an event."""
@@ -597,7 +672,8 @@ class AgentContext:
             else:
                 payload = {"task": str(subtask)}
 
-            message = Message.user(json.dumps(payload))
+            from a2a.types import TextPart
+            message = Message(role=Role.user, parts=[TextPart(text=json.dumps(payload))])
 
             aip_context = AIPContext(
                 run_id=run_id,

@@ -11,7 +11,7 @@ This example demonstrates how to create a publicly accessible agent:
 
 Environment Variables (configured in .env):
 - AIP_ENDPOINT=https://api.aip.unibase.com
-- GATEWAY_URL=http://gateway.aip.unibase.com
+- GATEWAY_URL=https://gateway.aip.unibase.com
 - MEMBASE_ACCOUNT=0x5ea13664c5ce67753f208540d25b913788aa3daa (test account)
 """
 
@@ -209,7 +209,7 @@ async def register_agent_to_platform(user_wallet: str) -> str:
         # 4. Register agent (including on-chain registration)
         print("\n[4/4] Registering agent with platform (on-chain registration)...")
         try:
-            result = await client.register_agent(user_id, agent_config)
+            result = await client.register_agent(agent_config, user_id=user_id)
             agent_id = result.get("agent_id")
             print(f"  ✓ Agent registered successfully!")
             print(f"  Agent ID: {agent_id}")
@@ -239,7 +239,7 @@ def start_agent_service(user_wallet: str, agent_id: str):
 
     # Get configuration
     aip_endpoint = os.environ.get("AIP_ENDPOINT", "https://api.aip.unibase.com")
-    gateway_url = os.environ.get("GATEWAY_URL", "http://gateway.aip.unibase.com")
+    gateway_url = os.environ.get("GATEWAY_URL", "https://gateway.aip.unibase.com")
     agent_host = os.environ.get("AGENT_HOST", "0.0.0.0")
     agent_port = int(os.environ.get("AGENT_PORT", "8200"))
 
