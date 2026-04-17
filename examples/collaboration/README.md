@@ -115,6 +115,14 @@ resp = httpx.post("https://api.pay.unibase.com/v1/login", json={
 token = resp.json()["token"]
 ```
 
+## Skills (for AI Agents like Claude)
+
+The `skills/collaboration/` directory contains Markdown instruction docs that teach AI agents how to use the collaboration API. To use them, add `skills/collaboration/` as a skill directory in your AI agent configuration.
+
+See [skills/collaboration/SKILL.md](../../skills/collaboration/SKILL.md) for the entry point.
+
+---
+
 ## Client-side Encryption (optional)
 
 ```bash
