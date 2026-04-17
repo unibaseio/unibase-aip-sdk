@@ -1,6 +1,6 @@
 import asyncio
 import hashlib
-from aip_sdk import AsyncAIPClient, MissionClient
+from aip_sdk import AsyncAIPClient, JobClient
 
 async def auto_verify_agent_work(mission_id: str, evaluator_key: str):
     """
@@ -9,7 +9,7 @@ async def auto_verify_agent_work(mission_id: str, evaluator_key: str):
     and calls 'complete' or 'reject' on the ERC-8183 market.
     """
     aip = AsyncAIPClient()
-    market = MissionClient(aip)
+    market = JobClient(aip)
 
     # 1. Fetch mission details
     mission = await market.get(mission_id)

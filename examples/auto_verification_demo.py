@@ -1,7 +1,7 @@
 import asyncio
 import os
 import logging
-from aip_sdk import AsyncAIPClient, MissionClient, SchemaEvaluator
+from aip_sdk import AsyncAIPClient, JobClient, SchemaEvaluator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -18,7 +18,7 @@ async def run_auto_verification_demo():
     # Setup
     aip_url = os.getenv("AIP_PLATFORM_URL", "http://localhost:8000")
     client = AsyncAIPClient(base_url=aip_url)
-    market = MissionClient(client)
+    market = JobClient(client)
     
     EVALUATOR_ID = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" # Hardhat Account #1
     evaluator = SchemaEvaluator(market, evaluator_id=EVALUATOR_ID)

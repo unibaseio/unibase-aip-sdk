@@ -2,7 +2,7 @@ import asyncio
 import os
 import uuid
 import logging
-from aip_sdk import AsyncAIPClient, MissionClient
+from aip_sdk import AsyncAIPClient, JobClient
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -23,8 +23,8 @@ async def run_agent_commerce_demo():
     aip_base_url = os.getenv("AIP_PLATFORM_URL", "http://localhost:8000")
     client = AsyncAIPClient(base_url=aip_base_url)
     
-    # The MissionClient is the high-level interface for Job Markets
-    mission_market = MissionClient(client)
+    # The JobClient is the high-level interface for Job Markets
+    mission_market = JobClient(client)
 
     # Identifiers for our agents (in AIP, these are registered UUIDs/Addresses)
     CLIENT_AGENT_ID = "agent_uuid_client_123"
