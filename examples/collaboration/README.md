@@ -5,8 +5,8 @@
 ### 1. Install the SDK
 
 ```bash
-# Clone the SDK repo
-git clone https://github.com/unibaseio/unibase-aip-sdk.git
+# Clone the SDK repo (feat/collaboration branch)
+git clone -b feat/collaboration https://github.com/unibaseio/unibase-aip-sdk.git
 cd unibase-aip-sdk
 
 # Install (in a venv recommended)
@@ -15,7 +15,12 @@ source venv/bin/activate   # Linux/Mac
 pip install -e .
 ```
 
-Or install from the main AIP repo (which includes the SDK as a dependency):
+Or install via pip directly from the branch:
+```bash
+pip install "unibase-aip-sdk @ git+https://github.com/unibaseio/unibase-aip-sdk.git@feat/collaboration"
+```
+
+Or install from the main AIP repo (which pulls the SDK automatically):
 ```bash
 git clone -b feat/multi-agent-collaboration https://github.com/unibaseio/unibase-aip.git
 cd unibase-aip
