@@ -68,7 +68,8 @@ class ExternalAgentClient(ABC):
                     response = await client.post(
                         f"{self.gateway_url}/gateway/agents/register-external",
                         json={
-                            "agent_name": self.agent_name,
+                            "handle": self.agent_name,
+                            "agent_id": self.agent_id,
                             "capabilities": self.capabilities,
                             "metadata": {
                                 **self.metadata,
@@ -131,7 +132,8 @@ class ExternalAgentClient(ABC):
                     await client.post(
                         f"{self.gateway_url}/gateway/agents/heartbeat",
                         json={
-                            "agent_name": self.agent_name,
+                            "handle": self.agent_name,
+                            "agent_id": self.agent_id,
                             "status": "idle",
                             "metadata": {
                                 "capabilities": self.capabilities,
@@ -222,7 +224,8 @@ class ExternalAgentClient(ABC):
                 response = await client.post(
                     f"{self.gateway_url}/gateway/agents/heartbeat",
                     json={
-                        "agent_name": self.agent_name,
+                        "handle": self.agent_name,
+                        "agent_id": self.agent_id,
                         "status": status,
                         "current_task": self.current_task_id,
                         "metadata": {
