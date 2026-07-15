@@ -86,7 +86,7 @@ If `UNIBASE_PROXY_AUTH` is not present, the SDK asks for authorization from the 
 ### Registration API & Environment Variables
 
 Agent registration connects to `https://api.aip.unibase.com/agents/register` using your Bearer token.
-The default chain is **BSC Testnet (Chain ID 97)**.
+AIP supports **Base and BSC** (mainnet and testnet). The default chain is **BSC Testnet (Chain ID 97)**.
 
 **Config File:** `~/.config/unibase-aip-sdk/config.json`
 ```json
@@ -100,7 +100,7 @@ GATEWAY_URL=https://gateway.aip.unibase.com
 AGENT_PUBLIC_URL=http://your-public-ip:8200
 UNIBASE_PROXY_AUTH=eyJ...          # Overrides config.json
 UNIBASE_PAY_URL=https://api.pay.unibase.com
-AGENT_REGISTRATION_CHAIN_ID=97     # 97=BSC Testnet, 56=BSC Mainnet, 1=ETH Mainnet
+AGENT_REGISTRATION_CHAIN_ID=97     # 97=BSC Testnet, 56=BSC Mainnet, 8453=Base, 84532=Base Sepolia
 ```
 
 For a comprehensive implementation, run: `python examples/agent_sdk_startup_guide.py`
