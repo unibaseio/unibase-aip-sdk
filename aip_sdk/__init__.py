@@ -65,6 +65,9 @@ from aip_sdk.messaging import (
     AIP_METADATA_KEY,
 )
 
+# Authorization helpers (env var -> cached config -> interactive flow)
+from aip_sdk import auth
+
 # Exceptions
 from aip_sdk.exceptions import (
     AIPError,
@@ -123,6 +126,8 @@ __all__ = [
     "AIPMetadata",
     "PaymentEvent",
     "AIP_METADATA_KEY",
+    # Authorization helpers
+    "auth",
     # Exceptions
     "AIPError",
     "ConnectionError",
