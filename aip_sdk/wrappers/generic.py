@@ -326,6 +326,18 @@ def expose_as_a2a(
     # Resolve account integration settings
     resolved_user_id = user_id or os.getenv("AIP_USER_ID")
     resolved_privy_token = privy_token or os.getenv("PRIVY_TOKEN")
+    if not resolved_user_id and not resolved_privy_token:
+        # Wallet-key mode: derive the owner address locally from
+        # UNIBASE_WALLET_PRIVATE_KEY (env or cached config) and register via
+        # the token-less path. The key itself never leaves the machine.
+        from aip_sdk import auth as _auth
+
+        wallet_key = _auth.load_private_key()
+        if wallet_key:
+            try:
+                resolved_user_id = _auth.wallet_from_private_key(wallet_key)
+            except Exception as e:
+                logger.warning(f"Ignoring invalid UNIBASE_WALLET_PRIVATE_KEY: {e}")
     resolved_aip_endpoint = aip_endpoint or get_default_aip_endpoint()
 
     # Use default cost_model if not provided

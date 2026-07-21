@@ -1,14 +1,28 @@
 """Unibase authorization helpers shared by SDK consumers.
 
-Provides the first-run flow the examples use: environment variable ->
-cached config file -> interactive browser authorization. Mirrors the Go
-SDK's ``auth`` package.
+Two interchangeable credential types — provide ONE of them:
+
+- **Proxy-auth JWT** (``UNIBASE_PROXY_AUTH``): obtained from Unibase Pay via
+  the interactive browser flow. Sent as a Bearer token; the platform
+  resolves your wallet from it.
+- **Wallet private key** (``UNIBASE_WALLET_PRIVATE_KEY``): the SDK derives
+  your wallet address locally and registers via the token-less path
+  (``user_id`` in the request body). The key never leaves your machine.
+
+Resolution order: env var -> cached config file -> interactive flow (which
+lets you pick either method). Mirrors the Go SDK's ``auth`` package.
 
 Typical usage::
 
     from aip_sdk import auth
 
     token, wallet = auth.ensure_auth()  # interactive on first run
+
+    expose_as_a2a(
+        ...,
+        privy_token=token or None,  # JWT mode
+        user_id=wallet,             # private-key mode (token == "")
+    )
 """
 
 import base64
@@ -21,7 +35,10 @@ __all__ = [
     "config_file",
     "load_token",
     "save_token",
+    "load_private_key",
+    "save_private_key",
     "extract_wallet",
+    "wallet_from_private_key",
     "interactive_auth",
     "ensure_auth",
 ]
@@ -36,17 +53,29 @@ def _pay_url() -> str:
     return os.environ.get("UNIBASE_PAY_URL", "https://api.pay.unibase.com")
 
 
+def _read_config() -> dict:
+    try:
+        return json.loads(config_file().read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _write_config(updates: dict) -> None:
+    """Merge updates into the config file (0600 perms)."""
+    path = config_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = _read_config()
+    data.update({k: v for k, v in updates.items() if v})
+    path.write_text(json.dumps(data, indent=2))
+    path.chmod(0o600)
+
+
 def load_token() -> Optional[str]:
     """Read UNIBASE_PROXY_AUTH from the environment, then the config file."""
     env_token = os.environ.get("UNIBASE_PROXY_AUTH")
     if env_token:
         return env_token
-
-    try:
-        cfg = json.loads(config_file().read_text())
-        return cfg.get("UNIBASE_PROXY_AUTH")
-    except (OSError, json.JSONDecodeError):
-        return None
+    return _read_config().get("UNIBASE_PROXY_AUTH")
 
 
 def save_token(
@@ -55,15 +84,31 @@ def save_token(
     agent_wallet: Optional[str] = None,
 ) -> None:
     """Persist the token (and optional agent identity) to the config file."""
-    path = config_file()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    data = {"UNIBASE_PROXY_AUTH": token}
-    if agent_id:
-        data["AGENT_ID"] = agent_id
-    if agent_wallet:
-        data["AGENT_WALLET"] = agent_wallet
-    path.write_text(json.dumps(data, indent=2))
-    print(f"  saved auth token to {path}")
+    _write_config(
+        {
+            "UNIBASE_PROXY_AUTH": token,
+            "AGENT_ID": agent_id,
+            "AGENT_WALLET": agent_wallet,
+        }
+    )
+    print(f"  saved auth token to {config_file()}")
+
+
+def load_private_key() -> Optional[str]:
+    """Read UNIBASE_WALLET_PRIVATE_KEY from the environment, then the config file."""
+    env_key = os.environ.get("UNIBASE_WALLET_PRIVATE_KEY")
+    if env_key:
+        return env_key
+    return _read_config().get("UNIBASE_WALLET_PRIVATE_KEY")
+
+
+def save_private_key(private_key: str) -> None:
+    """Persist the wallet private key to the config file (0600 perms).
+
+    The key is stored locally only — it is never sent to the platform.
+    """
+    _write_config({"UNIBASE_WALLET_PRIVATE_KEY": private_key})
+    print(f"  saved wallet key to {config_file()} (never sent to the platform)")
 
 
 def extract_wallet(token: str) -> Optional[str]:
@@ -80,17 +125,37 @@ def extract_wallet(token: str) -> Optional[str]:
         return None
 
 
+def wallet_from_private_key(private_key: str) -> str:
+    """Derive the wallet address from a hex private key (locally, offline)."""
+    from eth_account import Account
+
+    key = private_key.strip()
+    if not key.startswith("0x"):
+        key = "0x" + key
+    return Account.from_key(key).address
+
+
 def interactive_auth() -> Tuple[str, str]:
-    """Fetch an authorization URL and read the signed JWT from stdin.
+    """Interactive first-run flow. Lets the user pick a credential type.
 
     Returns:
-        (token, wallet_address)
+        (token, wallet_address) — token is "" in private-key mode.
     """
+    print("\n=== Unibase Authorization ===")
+    print("Choose an authorization method:")
+    print("  1) Browser authorization — open a URL, approve, paste the JWT token")
+    print("  2) Wallet private key — paste a hex private key (stored locally only)")
+    choice = input("Choice [1]: ").strip() or "1"
+
+    if choice == "2":
+        return _interactive_private_key()
+    return _interactive_token()
+
+
+def _interactive_token() -> Tuple[str, str]:
     import httpx
 
-    print("\n=== Unibase Authorization ===")
-    print("[1/3] Fetching authorization URL ...")
-
+    print("\n[1/3] Fetching authorization URL ...")
     pay_url = _pay_url()
     try:
         resp = httpx.post(f"{pay_url}/v1/init", json=True, timeout=30.0)
@@ -114,10 +179,37 @@ def interactive_auth() -> Tuple[str, str]:
     return token, wallet
 
 
+def _interactive_private_key() -> Tuple[str, str]:
+    import getpass
+
+    print("\nPaste your wallet private key (hex, input hidden) and press Enter:")
+    key = getpass.getpass("  Private key: ").strip()
+    if not key:
+        raise RuntimeError("No private key provided — aborted")
+
+    try:
+        wallet = wallet_from_private_key(key)
+    except Exception as e:
+        raise RuntimeError(f"Invalid private key: {e}") from e
+
+    print(f"  wallet: {wallet}")
+    save_private_key(key)
+    return "", wallet
+
+
 def ensure_auth() -> Tuple[str, str]:
-    """Return a usable (token, wallet), running interactive auth if no
-    cached token is found."""
+    """Return usable credentials, running the interactive flow if none cached.
+
+    Returns:
+        (token, wallet). JWT mode: both set. Private-key mode: token is ""
+        and wallet is the address derived from the key.
+    """
     token = load_token()
     if token:
         return token, extract_wallet(token) or ""
+
+    key = load_private_key()
+    if key:
+        return "", wallet_from_private_key(key)
+
     return interactive_auth()

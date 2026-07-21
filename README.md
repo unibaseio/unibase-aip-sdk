@@ -44,8 +44,8 @@ Unibase AIP SDK now provides a fully-fledged architecture for registering and ru
 
 When you build an agent using the SDK, the startup flow automatically handles authorization and blockchain registration:
 
-1. **[Authorization]** The SDK checks `~/.config/unibase-aip-sdk/config.json` for `UNIBASE_PROXY_AUTH`. If missing, it initiates an **Interactive Auth Flow**.
-2. **[Identity]** Extracts your master developer wallet address from the token. Passing an explicit `user_id` to `expose_as_a2a()` is optional: registration triggers when **either** `privy_token` or `user_id` is set, and when a token is present the platform resolves the user from it (token-only registration).
+1. **[Authorization]** The SDK looks for a credential: `UNIBASE_PROXY_AUTH` (JWT) or `UNIBASE_WALLET_PRIVATE_KEY` (wallet key) — env first, then `~/.config/unibase-aip-sdk/config.json`. If neither exists, it starts an **Interactive Auth Flow** where you pick either method.
+2. **[Identity]** JWT mode: your wallet address comes from the token (the platform resolves it — token-only registration, no `user_id` needed). Key mode: the SDK derives your wallet address locally from the private key and registers via the token-less `user_id` path; the key never leaves your machine.
 3. **[Registration]** Calls `POST /agents/register` on the AIP Platform to register your agent on-chain.
 4. **[Service Start]** The agent starts a local HTTP server (the agent card is served on both `GET /` and `GET /.well-known/agent-card.json`):
    - If `endpoint_url` is set, it operates in **PUSH mode** (Gateway calls your URL).
@@ -78,32 +78,43 @@ The SDK automatically detects `via_gateway=True` or provided `job_offerings` and
 
 ### Authorization (`aip_sdk.auth`)
 
-The first-run authorization flow is available as a public module — the same env var → cached config → interactive browser flow the examples use:
+Two interchangeable credential types — provide **one** of them:
+
+| Credential | Env var | How it registers |
+|------------|---------|------------------|
+| **Proxy-auth JWT** | `UNIBASE_PROXY_AUTH` | Sent as a Bearer token; the platform resolves your wallet from it |
+| **Wallet private key** | `UNIBASE_WALLET_PRIVATE_KEY` | The SDK derives your wallet address **locally** and registers via the token-less path (`user_id`); the key never leaves your machine |
+
+Resolution order: env var → cached config file → interactive flow. If both are configured, the JWT wins.
 
 ```python
 from aip_sdk import auth
 
-token, wallet = auth.ensure_auth()   # loads UNIBASE_PROXY_AUTH / config.json,
-                                     # or runs the interactive flow on first run
+token, wallet = auth.ensure_auth()   # interactive on first run — lets you pick
+                                     # browser auth OR pasting a private key
 
 server = expose_as_a2a(
     name="My Agent",
     handler=my_handler,
-    privy_token=token,               # user_id optional — resolved from the token
+    privy_token=token or None,       # JWT mode
+    user_id=wallet,                  # private-key mode (token == "")
     ...
 )
 ```
 
+`expose_as_a2a()` also picks the key up automatically: with no `user_id`/`privy_token` given, it derives the owner address from `UNIBASE_WALLET_PRIVATE_KEY` (env or cached config).
+
 | Function | Purpose |
 |----------|---------|
-| `auth.ensure_auth()` | Return `(token, wallet)`, running interactive auth if nothing is cached |
-| `auth.load_token()` | Read `UNIBASE_PROXY_AUTH` from the env, then the config file |
-| `auth.save_token(token)` | Persist the token (and optional agent identity) to the config file |
+| `auth.ensure_auth()` | Return `(token, wallet)`, running interactive auth if nothing is cached. Private-key mode returns `("", wallet)` |
+| `auth.load_token()` / `auth.save_token(token)` | Read/persist `UNIBASE_PROXY_AUTH` (env, then config file) |
+| `auth.load_private_key()` / `auth.save_private_key(key)` | Read/persist `UNIBASE_WALLET_PRIVATE_KEY` (env, then config file; stored with `0600` perms) |
 | `auth.extract_wallet(token)` | Decode the JWT and return its `sub` claim |
-| `auth.interactive_auth()` | Fetch an auth URL, prompt for the signed JWT on stdin |
+| `auth.wallet_from_private_key(key)` | Derive the EIP-55 wallet address from a hex private key (offline) |
+| `auth.interactive_auth()` | Interactive flow: pick browser auth (paste JWT) or paste a private key (hidden input) |
 | `auth.config_file()` | Path to the cached config (`~/.config/unibase-aip-sdk/config.json`) |
 
-The interactive flow:
+The interactive browser flow:
 1. Calls `POST https://api.pay.unibase.com/v1/init` to generate an auth link.
 2. Prompts the terminal: *"Open this URL in your browser and approve: https://..."*
 3. Once authorized, saves the token to `~/.config/unibase-aip-sdk/config.json`.
@@ -126,7 +137,8 @@ AIP supports **Base and BSC** (mainnet and testnet). The default chain is **BSC 
 AIP_ENDPOINT=https://api.aip.unibase.com
 GATEWAY_URL=https://gateway.aip.unibase.com
 AGENT_PUBLIC_URL=http://your-public-ip:8200
-UNIBASE_PROXY_AUTH=eyJ...          # Overrides config.json
+UNIBASE_PROXY_AUTH=eyJ...          # Credential option A: JWT (overrides config.json)
+UNIBASE_WALLET_PRIVATE_KEY=0x...   # Credential option B: wallet key (local only; JWT wins if both set)
 UNIBASE_PAY_URL=https://api.pay.unibase.com
 AGENT_REGISTRATION_CHAIN_ID=97     # 97=BSC Testnet, 56=BSC Mainnet, 8453=Base, 84532=Base Sepolia
 ```
