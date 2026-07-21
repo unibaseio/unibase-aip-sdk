@@ -8,7 +8,7 @@ Complete library for building both **Client Applications** and **Agent Services*
 2. [Building Agents (New)](#building-agents)
    - [Startup Flow Overview](#startup-flow-overview)
    - [Butler Agent + Job Queue](#butler-agent--job-queue)
-   - [Interactive Authorization Flow](#interactive-authorization-flow)
+   - [Authorization (`aip_sdk.auth`)](#authorization-aip_sdkauth)
    - [Registration API & Environment Variables](#registration-api--environment-variables)
 3. [Building Clients](#building-clients)
    - [Client Architecture](#client-architecture)
@@ -45,11 +45,12 @@ Unibase AIP SDK now provides a fully-fledged architecture for registering and ru
 When you build an agent using the SDK, the startup flow automatically handles authorization and blockchain registration:
 
 1. **[Authorization]** The SDK checks `~/.config/unibase-aip-sdk/config.json` for `UNIBASE_PROXY_AUTH`. If missing, it initiates an **Interactive Auth Flow**.
-2. **[Identity]** Extracts your master developer wallet address from the token.
+2. **[Identity]** Extracts your master developer wallet address from the token. Passing an explicit `user_id` to `expose_as_a2a()` is optional: registration triggers when **either** `privy_token` or `user_id` is set, and when a token is present the platform resolves the user from it (token-only registration).
 3. **[Registration]** Calls `POST /agents/register` on the AIP Platform to register your agent on-chain.
-4. **[Service Start]** The agent starts a local HTTP server:
+4. **[Service Start]** The agent starts a local HTTP server (the agent card is served on both `GET /` and `GET /.well-known/agent-card.json`):
    - If `endpoint_url` is set, it operates in **PUSH mode** (Gateway calls your URL).
    - If `endpoint_url=None`, it operates in **POLLING mode**.
+   - A `via_gateway=True` agent polls the gateway job queue **even when `endpoint_url` is set** — the platform delivers marketplace jobs through the queue (pull), not by pushing to the endpoint.
 
 ### Terminal Agent + Job Queue
 
@@ -75,17 +76,44 @@ The SDK automatically detects `via_gateway=True` or provided `job_offerings` and
 - `GET /gateway/jobs/poll` (fetches orchestrated jobs)
 - `POST /gateway/jobs/complete` (submits results)
 
-### Interactive Authorization Flow
+### Authorization (`aip_sdk.auth`)
 
-If `UNIBASE_PROXY_AUTH` is not present, the SDK asks for authorization from the terminal:
+The first-run authorization flow is available as a public module — the same env var → cached config → interactive browser flow the examples use:
+
+```python
+from aip_sdk import auth
+
+token, wallet = auth.ensure_auth()   # loads UNIBASE_PROXY_AUTH / config.json,
+                                     # or runs the interactive flow on first run
+
+server = expose_as_a2a(
+    name="My Agent",
+    handler=my_handler,
+    privy_token=token,               # user_id optional — resolved from the token
+    ...
+)
+```
+
+| Function | Purpose |
+|----------|---------|
+| `auth.ensure_auth()` | Return `(token, wallet)`, running interactive auth if nothing is cached |
+| `auth.load_token()` | Read `UNIBASE_PROXY_AUTH` from the env, then the config file |
+| `auth.save_token(token)` | Persist the token (and optional agent identity) to the config file |
+| `auth.extract_wallet(token)` | Decode the JWT and return its `sub` claim |
+| `auth.interactive_auth()` | Fetch an auth URL, prompt for the signed JWT on stdin |
+| `auth.config_file()` | Path to the cached config (`~/.config/unibase-aip-sdk/config.json`) |
+
+The interactive flow:
 1. Calls `POST https://api.pay.unibase.com/v1/init` to generate an auth link.
-2. Prompts the terminal: *"I need your authorization... Please click here to approve: https://..."*
+2. Prompts the terminal: *"Open this URL in your browser and approve: https://..."*
 3. Once authorized, saves the token to `~/.config/unibase-aip-sdk/config.json`.
 4. The SDK proceeds to autonomously register the agent.
 
 ### Registration API & Environment Variables
 
-Agent registration connects to `https://api.aip.unibase.com/agents/register` using your Bearer token.
+Agent registration connects to `https://api.aip.unibase.com/agents/register` using your Bearer token. When a `privy_token` is present the request omits `user_id` from the body — the platform resolves the user from the token.
+
+> **Wire format note:** generated agent cards advertise the A2A service **base URL** (e.g. `http://host:8201`), not the card path — consumers such as the platform's card refresher append `/.well-known/agent-card.json` themselves. This matches the Go SDK's cross-language contract fixtures.
 AIP supports **Base and BSC** (mainnet and testnet). The default chain is **BSC Testnet (Chain ID 97)**.
 
 **Config File:** `~/.config/unibase-aip-sdk/config.json`
