@@ -70,7 +70,8 @@ def generate_agent_card(
         skills=skills,
         provider=provider,
         services=[
-            AgentService(name="A2A", endpoint=f"{base_url}/.well-known/agent-card.json", a2aSkills=[s.name for s in skills]),
+            # Base URL only — consumers append /.well-known/agent-card.json.
+            AgentService(name="A2A", endpoint=base_url, a2aSkills=[s.name for s in skills]),
             AgentService(name="web", endpoint=base_url)
         ],
         defaultInputModes=["text/plain", "application/json"],
@@ -117,7 +118,8 @@ def agent_card_from_metadata(
         skills=skills,
         provider=provider,
         services=[
-            AgentService(name="A2A", endpoint=f"{base_url}/.well-known/agent-card.json", a2aSkills=[s.name for s in skills]),
+            # Base URL only — consumers append /.well-known/agent-card.json.
+            AgentService(name="A2A", endpoint=base_url, a2aSkills=[s.name for s in skills]),
             AgentService(name="web", endpoint=base_url)
         ],
         defaultInputModes=["text/plain", "application/json"],

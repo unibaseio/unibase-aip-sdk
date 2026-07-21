@@ -257,8 +257,11 @@ def expose_as_a2a(
         streaming: Enable streaming responses
         raw_response: If True, handler output is sent directly as SSE data without JSON-RPC wrapping
         version: Agent version string
-        user_id: User wallet address (for on-chain ERC-8004 registration)
-        privy_token: Privy Bearer Token for authentication (auto-reads PRIVY_TOKEN env if not set)
+        user_id: User wallet address (for on-chain ERC-8004 registration).
+            Optional when privy_token is set — the platform resolves the user
+            from the Bearer token. Falls back to the AIP_USER_ID env var.
+        privy_token: Privy Bearer Token for authentication (auto-reads PRIVY_TOKEN env if not set).
+            Registration triggers when either privy_token or user_id is available.
         aip_endpoint: AIP platform endpoint URL
         handle: Agent handle (auto-generated from name if not provided)
         auto_register: Whether to auto-register with AIP platform (POST /agents/register)
@@ -322,15 +325,18 @@ def expose_as_a2a(
 
     # Resolve account integration settings
     resolved_user_id = user_id or os.getenv("AIP_USER_ID")
+    resolved_privy_token = privy_token or os.getenv("PRIVY_TOKEN")
     resolved_aip_endpoint = aip_endpoint or get_default_aip_endpoint()
 
     # Use default cost_model if not provided
     resolved_cost_model = cost_model or CostModel(base_call_fee=0.001)
 
-    # Create registration config if user_id is provided
-    # Config is needed for both registration AND Gateway polling
+    # Create registration config if an identity is available: either a Privy
+    # token (the platform resolves the user from it, see
+    # PlatformClient.register_agent) or an explicit user_id for the
+    # token-less path. Config is needed for both registration AND Gateway polling.
     registration_config = None
-    if resolved_user_id and (auto_register or gateway_url):
+    if (resolved_user_id or resolved_privy_token) and (auto_register or gateway_url):
         # Merge via_gateway into metadata
         merged_metadata = dict(metadata or {})
         if via_gateway:
@@ -338,7 +344,7 @@ def expose_as_a2a(
 
         registration_config = {
             "user_id": resolved_user_id,
-            "privy_token": privy_token or os.getenv("PRIVY_TOKEN"),
+            "privy_token": resolved_privy_token,
             "aip_endpoint": resolved_aip_endpoint,
             "gateway_url": gateway_url,
             "handle": handle,
@@ -507,7 +513,10 @@ class AgentWrapper:
             ),
             skills=self._build_skills(),
             services=[
-                AgentService(name="A2A", endpoint=f"{discovery_url}/.well-known/agent-card.json", a2aSkills=[s.name for s in self._build_skills()]),
+                # The endpoint is the service BASE URL: consumers (e.g. the AIP
+                # platform's card refresher) append /.well-known/agent-card.json
+                # themselves — including the path here doubled it up.
+                AgentService(name="A2A", endpoint=discovery_url, a2aSkills=[s.name for s in self._build_skills()]),
                 AgentService(name="web", endpoint=discovery_url)
             ],
             capabilities=AgentCapabilities(),

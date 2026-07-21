@@ -111,17 +111,23 @@ class A2AServer:
             if self.registration_config and self.auto_register:
                 await self._register_with_aip()
 
-            # Start Gateway polling if endpoint_url is None (private mode)
+            # Start Gateway polling when the agent has no public endpoint
+            # (private agents pull their work), and ALSO for via_gateway agents
+            # even when an endpoint is set: the platform delivers jobs for
+            # via_gateway agents through the gateway job QUEUE (pull), not by
+            # pushing to the endpoint — an endpoint-only agent would leave
+            # those jobs pending forever.
             if self.registration_config:
                 endpoint_url = self.registration_config.get("endpoint_url")
                 gateway_url = self.registration_config.get("gateway_url")
+                via_gateway = self.registration_config.get("via_gateway", False)
 
-                if endpoint_url is None and gateway_url:
+                if gateway_url and (endpoint_url is None or via_gateway):
                     has_job_offerings = bool(self.registration_config.get("job_offerings"))
-                    via_gateway = self.registration_config.get("via_gateway", False)
                     use_job_queue = has_job_offerings or via_gateway
                     mode = "JOB-QUEUE" if use_job_queue else "TASK-QUEUE"
-                    logger.info(f"Starting Gateway polling mode (private agent, {mode})")
+                    kind = "private agent" if endpoint_url is None else "public agent, via_gateway"
+                    logger.info(f"Starting Gateway polling mode ({kind}, {mode})")
                     logger.info(f"  Gateway URL: {gateway_url}")
                     logger.info(f"  Agent Handle: {self.registration_config.get('handle')}")
                     logger.info(f"  job_offerings: {has_job_offerings}, via_gateway: {via_gateway}")
@@ -159,6 +165,10 @@ class A2AServer:
         )
 
         # Agent Card endpoint
+        # The agent card advertises the root as the "web" service endpoint and
+        # the platform health-checks GET /, so serve the card there too instead
+        # of answering 405 (only POST / was registered).
+        @app.get("/")
         @app.get("/.well-known/agent-card.json")
         async def get_agent_card():
             return JSONResponse(content=self._serialize_agent_card())

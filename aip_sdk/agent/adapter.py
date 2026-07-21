@@ -107,7 +107,8 @@ def agent_config_to_card(
     """Convert an AgentConfig to an A2A AgentCard."""
     # Build URL
     url = endpoint_url or f"http://localhost/{agent_id}"
-    a2a_endpoint = f"{url.rstrip('/')}/.well-known/agent-card.json"
+    # Base URL only — consumers append /.well-known/agent-card.json.
+    a2a_endpoint = url.rstrip("/")
     
     # Build skills list
     skills = []

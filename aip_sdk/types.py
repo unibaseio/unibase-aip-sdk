@@ -331,7 +331,10 @@ class AgentConfig(BaseModel):
         
         # Primary endpoint
         url = self.endpoint_url or f"http://localhost:8000/agents/{handle}/"
-        a2a_endpoint = f"{url.rstrip('/')}/.well-known/agent-card.json"
+        # The A2A service endpoint is the service BASE URL: consumers (e.g. the
+        # platform's card refresher) append /.well-known/agent-card.json
+        # themselves — including the path here doubled it up.
+        a2a_endpoint = url.rstrip("/")
         
         skill_cards = [
             AgentSkillCard(

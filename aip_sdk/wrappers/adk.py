@@ -236,7 +236,8 @@ class ADKWrapper:
             skills=self.skills,
             capabilities=AgentCapabilities(streaming=True),
             services=[
-                AgentService(name="A2A", endpoint=f"{discovery_url}/.well-known/agent-card.json", a2aSkills=[s.name for s in self.skills]),
+                # Base URL only — consumers append /.well-known/agent-card.json.
+                AgentService(name="A2A", endpoint=discovery_url, a2aSkills=[s.name for s in self.skills]),
                 AgentService(name="web", endpoint=discovery_url)
             ],
             defaultInputModes=["text/plain", "application/json"],
