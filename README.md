@@ -45,7 +45,7 @@ Unibase AIP SDK now provides a fully-fledged architecture for registering and ru
 When you build an agent using the SDK, the startup flow automatically handles authorization and blockchain registration:
 
 1. **[Authorization]** The SDK looks for a credential: `UNIBASE_PROXY_AUTH` (JWT) or `UNIBASE_WALLET_PRIVATE_KEY` (wallet key) — env first, then `~/.config/unibase-aip-sdk/config.json`. If neither exists, it starts an **Interactive Auth Flow** where you pick either method.
-2. **[Identity]** JWT mode: your wallet address comes from the token (the platform resolves it — token-only registration, no `user_id` needed). Key mode: the SDK derives your wallet address locally from the private key and registers via the token-less `user_id` path; the key never leaves your machine.
+2. **[Identity]** JWT mode: your wallet address comes from the token (the platform resolves it — token-only registration, no `user_id` needed). Key mode: the SDK derives your wallet address and signs the registration message locally; the platform recovers the wallet from the EIP-191 signature — the key never leaves your machine.
 3. **[Registration]** Calls `POST /agents/register` on the AIP Platform to register your agent on-chain.
 4. **[Service Start]** The agent starts a local HTTP server (the agent card is served on both `GET /` and `GET /.well-known/agent-card.json`):
    - If `endpoint_url` is set, it operates in **PUSH mode** (Gateway calls your URL).
@@ -83,7 +83,7 @@ Two interchangeable credential types — provide **one** of them:
 | Credential | Env var | How it registers |
 |------------|---------|------------------|
 | **Proxy-auth JWT** | `UNIBASE_PROXY_AUTH` | Sent as a Bearer token; the platform resolves your wallet from it |
-| **Wallet private key** | `UNIBASE_WALLET_PRIVATE_KEY` | The SDK derives your wallet address **locally** and registers via the token-less path (`user_id`); the key never leaves your machine |
+| **Wallet private key** | `UNIBASE_WALLET_PRIVATE_KEY` | The SDK derives your wallet address and signs the registration message **locally** (EIP-191); the platform recovers your wallet from the signature — the key never leaves your machine |
 
 Resolution order: env var → cached config file → interactive flow. If both are configured, the JWT wins.
 
@@ -111,6 +111,7 @@ server = expose_as_a2a(
 | `auth.load_private_key()` / `auth.save_private_key(key)` | Read/persist `UNIBASE_WALLET_PRIVATE_KEY` (env, then config file; stored with `0600` perms) |
 | `auth.extract_wallet(token)` | Decode the JWT and return its `sub` claim |
 | `auth.wallet_from_private_key(key)` | Derive the EIP-55 wallet address from a hex private key (offline) |
+| `auth.sign_message(key, message)` | EIP-191 personal-sign a message (offline) — used for token-less registration auth |
 | `auth.interactive_auth()` | Interactive flow: pick browser auth (paste JWT) or paste a private key (hidden input) |
 | `auth.config_file()` | Path to the cached config (`~/.config/unibase-aip-sdk/config.json`) |
 

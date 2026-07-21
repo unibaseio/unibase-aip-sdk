@@ -175,16 +175,22 @@ class AsyncAIPClient:
         *,
         user_id: str = None,
         privy_token: str = None,
+        signature: str = None,
+        message: str = None,
     ) -> Dict[str, Any]:
         """Register an agent with AIP platform.
 
-        Uses POST /agents/register (Privy Token auth).
-        Authorization: Bearer {privy_token}
+        Uses POST /agents/register. Two auth methods:
+        - Bearer token: Authorization: Bearer {privy_token}
+        - Wallet signature: signature + message in the body; the platform
+          recovers the wallet address from the EIP-191 signature
 
         Args:
             agent: Agent configuration (AgentConfig or dict)
             user_id: User wallet address (for on-chain ERC-8004 registration)
             privy_token: Privy Bearer token for authentication
+            signature: EIP-191 signature over `message` (token-less auth)
+            message: The signed message text
         """
         if isinstance(agent, AgentConfig):
             reg_data = agent.to_registration_dict()
@@ -198,6 +204,11 @@ class AsyncAIPClient:
         # owner, causing a 401 "Authenticated user does not match" error.
         if user_id and not privy_token:
             reg_data["user_id"] = user_id
+        # Token-less auth: the platform recovers the wallet from the signature.
+        if signature and not privy_token:
+            reg_data["signature"] = signature
+            if message:
+                reg_data["message"] = message
 
         # Build headers (Bearer token auth)
         headers = {}

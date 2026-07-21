@@ -6,8 +6,9 @@ Two interchangeable credential types — provide ONE of them:
   the interactive browser flow. Sent as a Bearer token; the platform
   resolves your wallet from it.
 - **Wallet private key** (``UNIBASE_WALLET_PRIVATE_KEY``): the SDK derives
-  your wallet address locally and registers via the token-less path
-  (``user_id`` in the request body). The key never leaves your machine.
+  your wallet address and signs the registration message locally (EIP-191);
+  the platform recovers your wallet from the signature. The key never
+  leaves your machine.
 
 Resolution order: env var -> cached config file -> interactive flow (which
 lets you pick either method). Mirrors the Go SDK's ``auth`` package.
@@ -39,6 +40,7 @@ __all__ = [
     "save_private_key",
     "extract_wallet",
     "wallet_from_private_key",
+    "sign_message",
     "interactive_auth",
     "ensure_auth",
 ]
@@ -125,14 +127,34 @@ def extract_wallet(token: str) -> Optional[str]:
         return None
 
 
+def _normalize_key(private_key: str) -> str:
+    key = private_key.strip()
+    if not key.startswith("0x"):
+        key = "0x" + key
+    return key
+
+
 def wallet_from_private_key(private_key: str) -> str:
     """Derive the wallet address from a hex private key (locally, offline)."""
     from eth_account import Account
 
-    key = private_key.strip()
-    if not key.startswith("0x"):
-        key = "0x" + key
-    return Account.from_key(key).address
+    return Account.from_key(_normalize_key(private_key)).address
+
+
+def sign_message(private_key: str, message: str) -> str:
+    """Sign a message with the private key (EIP-191 personal sign, offline).
+
+    The platform recovers the wallet address from this signature during
+    token-less registration — the key itself is never transmitted.
+    """
+    from eth_account import Account
+    from eth_account.messages import encode_defunct
+
+    signed = Account.sign_message(
+        encode_defunct(text=message), private_key=_normalize_key(private_key)
+    )
+    sig = signed.signature.hex()
+    return sig if sig.startswith("0x") else "0x" + sig
 
 
 def interactive_auth() -> Tuple[str, str]:

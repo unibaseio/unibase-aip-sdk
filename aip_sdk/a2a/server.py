@@ -1006,7 +1006,13 @@ class A2AServer:
             )
 
             # Register with platform (uses POST /agents/register)
-            result = await self._aip_client.register_agent(agent_config, user_id=user_id, privy_token=privy_token)
+            result = await self._aip_client.register_agent(
+                agent_config,
+                user_id=user_id,
+                privy_token=privy_token,
+                signature=config.get("signature"),
+                message=config.get("message"),
+            )
             self._agent_id = result.get("agent_id", f"erc8004:{handle}")
 
             logger.info(f"Agent registered successfully: {self._agent_id}")

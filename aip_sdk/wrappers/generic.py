@@ -326,16 +326,30 @@ def expose_as_a2a(
     # Resolve account integration settings
     resolved_user_id = user_id or os.getenv("AIP_USER_ID")
     resolved_privy_token = privy_token or os.getenv("PRIVY_TOKEN")
-    if not resolved_user_id and not resolved_privy_token:
-        # Wallet-key mode: derive the owner address locally from
-        # UNIBASE_WALLET_PRIVATE_KEY (env or cached config) and register via
-        # the token-less path. The key itself never leaves the machine.
+    resolved_signature = None
+    resolved_message = None
+    if not resolved_privy_token:
+        # Wallet-key mode: without a Bearer token the platform authenticates
+        # registration by recovering the wallet from an EIP-191 signature.
+        # Derive the owner address and sign the registration message locally
+        # from UNIBASE_WALLET_PRIVATE_KEY (env or cached config) — the key
+        # itself never leaves the machine.
         from aip_sdk import auth as _auth
 
         wallet_key = _auth.load_private_key()
         if wallet_key:
             try:
-                resolved_user_id = _auth.wallet_from_private_key(wallet_key)
+                derived_wallet = _auth.wallet_from_private_key(wallet_key)
+                if not resolved_user_id:
+                    resolved_user_id = derived_wallet
+                elif resolved_user_id.lower() != derived_wallet.lower():
+                    logger.warning(
+                        f"user_id {resolved_user_id} does not match the wallet "
+                        f"derived from UNIBASE_WALLET_PRIVATE_KEY ({derived_wallet}); "
+                        "the platform will reject the registration"
+                    )
+                resolved_message = "Create an AIP agent"
+                resolved_signature = _auth.sign_message(wallet_key, resolved_message)
             except Exception as e:
                 logger.warning(f"Ignoring invalid UNIBASE_WALLET_PRIVATE_KEY: {e}")
     resolved_aip_endpoint = aip_endpoint or get_default_aip_endpoint()
@@ -357,6 +371,8 @@ def expose_as_a2a(
         registration_config = {
             "user_id": resolved_user_id,
             "privy_token": resolved_privy_token,
+            "signature": resolved_signature,
+            "message": resolved_message,
             "aip_endpoint": resolved_aip_endpoint,
             "gateway_url": gateway_url,
             "handle": handle,
