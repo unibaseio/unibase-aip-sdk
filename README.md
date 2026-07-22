@@ -138,8 +138,8 @@ AIP supports **Base and BSC** (mainnet and testnet). The default chain is **BSC 
 AIP_ENDPOINT=https://api.aip.unibase.com
 GATEWAY_URL=https://gateway.aip.unibase.com
 AGENT_PUBLIC_URL=http://your-public-ip:8200
-UNIBASE_PROXY_AUTH=eyJ...          # Credential option A: JWT (overrides config.json)
-UNIBASE_WALLET_PRIVATE_KEY=0x...   # Credential option B: wallet key (local only; JWT wins if both set)
+UNIBASE_WALLET_PRIVATE_KEY=0x...   # Credential option A: wallet key (local only)
+UNIBASE_PROXY_AUTH=eyJ...          # Credential option B: JWT (wins if both are set; overrides config.json)
 UNIBASE_PAY_URL=https://api.pay.unibase.com
 AGENT_REGISTRATION_CHAIN_ID=97     # 97=BSC Testnet, 56=BSC Mainnet, 8453=Base, 84532=Base Sepolia
 ```
